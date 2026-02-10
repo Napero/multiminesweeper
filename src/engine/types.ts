@@ -1,0 +1,51 @@
+export interface GameConfig {
+  rows: number;
+  cols: number;
+  minesTotal: number;
+  maxMinesPerCell: number; // 1..6
+  seed: number;
+  safeFirstClick: boolean;
+  // 0 = spread evenly (max 1 per cell before reuse), 1 = fully random clumping
+  density: number;
+}
+
+export interface Cell {
+  mineCount: number;   // 0..maxMinesPerCell
+  opened: boolean;
+  markerCount: number; // 0..6
+  hint: number;        // sum of neighbour mineCount (0..48)
+}
+
+export enum GameStatus {
+  Playing = "playing",
+  Won = "won",
+  Lost = "lost",
+}
+
+// Read-only cell snapshot for the UI layer
+export interface CellView {
+  row: number;
+  col: number;
+  opened: boolean;
+  markerCount: number;
+  hint: number | null;      // visible when opened or game over
+  mineCount: number | null;
+  exploded: boolean;        // the cell the player clicked to lose
+  wrongMarker: boolean;     // wrong marker shown on game-over
+}
+
+export interface Pos {
+  row: number;
+  col: number;
+}
+
+/** Default config */
+export const DEFAULT_CONFIG: GameConfig = {
+  rows: 16,
+  cols: 30,
+  minesTotal: 170,
+  maxMinesPerCell: 6,
+  seed: Date.now(),
+  safeFirstClick: true,
+  density: 0.6,
+};

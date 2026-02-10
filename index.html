@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-Minesweeper</title>
+  <link rel="icon" type="image/png" href="/sprites/favicon.png" />
+  <style>
+    @font-face {
+      font-family: "Pixelated MS Sans Serif";
+      src: url("/fonts/ms_sans_serif.woff2") format("woff2"),
+           url("/fonts/ms_sans_serif.woff") format("woff");
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Pixelated MS Sans Serif";
+      src: url("/fonts/ms_sans_serif_bold.woff2") format("woff2"),
+           url("/fonts/ms_sans_serif_bold.woff") format("woff");
+      font-weight: bold;
+      font-style: normal;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #c0c0c0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      font-size: 11px;
+      -webkit-font-smoothing: none;
+      -moz-osx-font-smoothing: unset;
+      image-rendering: pixelated;
+    }
+    #toolbar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 8px;
+      padding: 4px 8px;
+      border: 2px inset #fff;
+      background: #c0c0c0;
+      position: relative;
+    }
+    #toolbar canvas {
+      display: block;
+      width: 52px;
+      height: 52px;
+      image-rendering: pixelated;
+      cursor: pointer;
+    }
+    #timer {
+      font-size: 22px;
+      font-family: "Pixelated MS Sans Serif", Arial, monospace;
+      font-weight: bold;
+      -webkit-font-smoothing: none;
+      min-width: 70px;
+      text-align: center;
+      padding: 0 6px;
+    }
+    .toolbar-sep {
+      width: 1px;
+      height: 40px;
+      background: #808080;
+      margin: 0 4px;
+    }
+
+    /* Settings dropdown */
+    #settings-anchor { position: relative; }
+    #settings-dropdown {
+      display: none;
+      position: absolute;
+      top: 54px;
+      left: 0;
+      background: #c0c0c0;
+      border: 2px outset #fff;
+      padding: 2px 0;
+      z-index: 100;
+      min-width: 160px;
+      box-shadow: 2px 2px 4px rgba(0,0,0,.3);
+    }
+    #settings-dropdown.open { display: block; }
+    #settings-dropdown .preset {
+      display: block;
+      width: 100%;
+      padding: 4px 14px;
+      font-size: 11px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      -webkit-font-smoothing: none;
+      text-align: left;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+    #settings-dropdown .preset:hover { background: #000080; color: #fff; }
+    #settings-dropdown hr {
+      border: none;
+      border-top: 1px solid #808080;
+      margin: 2px 4px;
+    }
+
+    /* Custom config modal */
+    #custom-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    #custom-overlay.open { display: flex; }
+    #custom-panel {
+      background: #c0c0c0;
+      border: 3px outset #fff;
+      padding: 14px 18px;
+      min-width: 280px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      -webkit-font-smoothing: none;
+    }
+    #custom-panel h3 {
+      font-size: 11px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    #custom-panel label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+    #custom-panel input {
+      width: 70px;
+      font-size: 11px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      -webkit-font-smoothing: none;
+      padding: 1px 3px;
+    }
+    #custom-panel input[type="range"] {
+      width: 90px;
+      padding: 0;
+    }
+    #custom-panel .btn-row {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 10px;
+    }
+    #custom-panel button {
+      font-size: 11px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      -webkit-font-smoothing: none;
+      padding: 3px 14px;
+      cursor: pointer;
+    }
+
+    #game-container {
+      border: 3px outset #fff;
+      background: #c0c0c0;
+      padding: 6px;
+      line-height: 0;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      cursor: default;
+    }
+    #status-bar {
+      margin-top: 6px;
+      font-size: 11px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      -webkit-font-smoothing: none;
+      color: #333;
+      text-align: center;
+    }
+    #mine-breakdown {
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+    }
+    #mine-breakdown canvas {
+      display: inline-block;
+      image-rendering: pixelated;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <!-- Toolbar: Settings | Help | sep | Smiley | Timer | sep | Hint | GiveUp -->
+  <div id="toolbar">
+    <div id="settings-anchor">
+      <canvas id="btn-settings" width="26" height="26" title="Settings"></canvas>
+      <div id="settings-dropdown">
+        <button class="preset" data-preset="beginner">Beginner</button>
+        <button class="preset" data-preset="intermediate">Intermediate</button>
+        <button class="preset" data-preset="expert">Expert</button>
+        <hr>
+        <button class="preset" data-preset="custom">Custom…</button>
+      </div>
+    </div>
+    <canvas id="btn-help" width="26" height="26" title="Help"></canvas>
+    <div class="toolbar-sep"></div>
+    <canvas id="smiley" width="26" height="26" title="New Game"></canvas>
+    <span id="timer">0:00</span>
+    <div class="toolbar-sep"></div>
+    <canvas id="btn-hint" width="26" height="26" title="Hint"></canvas>
+    <canvas id="btn-giveup" width="26" height="26" title="Give Up"></canvas>
+  </div>
+
+  <!-- Custom config modal -->
+  <div id="custom-overlay">
+    <div id="custom-panel">
+      <h3>Custom Game</h3>
+      <label>Rows <input id="opt-rows" type="number" value="16" min="5" max="50"></label>
+      <label>Cols <input id="opt-cols" type="number" value="30" min="5" max="50"></label>
+      <label>Mines <input id="opt-mines" type="number" value="99" min="1" max="1500"></label>
+      <label>Max/cell <input id="opt-max" type="number" value="6" min="1" max="6"></label>
+      <label>Density <input id="opt-density" type="range" min="0" max="100" value="60"> <span id="density-val">0.60</span></label>
+      <label>Seed <input id="opt-seed" type="text" value="" placeholder="random"></label>
+      <div class="btn-row">
+        <button id="custom-cancel">Cancel</button>
+        <button id="custom-ok">Start</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+  </div>
+  <div id="status-bar">Left-click: open · Right-click: cycle marker · Middle-click: chord</div>
+  <div id="mine-breakdown">
+    <canvas id="breakdown-canvas" height="28"></canvas>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
