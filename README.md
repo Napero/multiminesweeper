@@ -10,7 +10,7 @@ Play it at [napero.github.io/multiminesweeper](https://napero.github.io/multimin
 
 Classic minesweeper rules apply, left-click to open, right-click to flag, middle-click to chord. The twist is that cells can stack multiple mines, so flags cycle from 1 to 6 and the hint numbers reflect the *total* mine count across all neighbours.
 
-Three presets (Beginner, Intermediate, Expert) and a fully custom mode with configurable density, which controls how much mines clump together vs spread out.
+Five presets (Beginner, Intermediate, Hard, Expert, Nightmare) and a fully custom mode with configurable density, which controls how much mines clump together vs spread out.
 
 ## Controls
 
