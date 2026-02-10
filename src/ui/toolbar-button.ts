@@ -22,7 +22,7 @@ function loadButtonSheet(): Promise<HTMLImageElement | null> {
   if (sheetPromise) return sheetPromise;
   sheetPromise = new Promise((resolve) => {
     const img = new Image();
-    img.src = "/sprites/buttons.png";
+    img.src = `${import.meta.env.BASE_URL}sprites/buttons.png`;
     img.onload = () => { sharedSheet = img; resolve(img); };
     img.onerror = () => { resolve(null); };
   });

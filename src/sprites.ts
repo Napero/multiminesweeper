@@ -88,7 +88,7 @@ export const SPRITE_RED_BG: SpriteRect = tile(1, 5);
 export const CELL_SIZE = W;
 export const CELL_HEIGHT = H;
 
-export function loadSpritesheet(url = "/sprites/sprites.png"): Promise<HTMLImageElement> {
+export function loadSpritesheet(url = `${import.meta.env.BASE_URL}sprites/sprites.png`): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);

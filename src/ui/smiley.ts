@@ -36,7 +36,7 @@ export class Smiley {
   private async loadSheet(): Promise<void> {
     try {
       const img = new Image();
-      img.src = "/sprites/smiley.png";
+      img.src = `${import.meta.env.BASE_URL}sprites/smiley.png`;
       await img.decode();
       this.sheet = img;
     } catch {

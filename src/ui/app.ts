@@ -57,6 +57,7 @@ export class App {
   private timerStarted = false;
   private hintPending = false;
   private hintHoverPos: { row: number; col: number } | null = null;
+  private hintCount = 0;
 
   constructor(canvas: HTMLCanvasElement, config: Partial<GameConfig> = {}) {
     this.canvas = canvas;
@@ -211,6 +212,8 @@ export class App {
             this.hintPending = false;
             this.hintHoverPos = null;
             this.hintBtn?.setActive(false);
+            this.hintCount++;
+            this.startTime -= this.hintCount * 10 * 1000;
             this.game.applyHint(r, c);
           } else {
             const cell = this.game.cell(r, c);
@@ -242,6 +245,7 @@ export class App {
     this.timerStarted = false;
     this.hintPending = false;
     this.hintHoverPos = null;
+    this.hintCount = 0;
     this.hintBtn?.setActive(false);
     this.updateTimerDisplay();
     this.render();
