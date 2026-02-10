@@ -8,9 +8,9 @@ Play it at [napero.github.io/multiminesweeper](https://napero.github.io/multimin
 
 ## How it works
 
-Classic minesweeper rules apply — left-click to open, right-click to flag, middle-click to chord. The twist is that cells can stack multiple mines, so flags cycle from 1 to 6 and the hint numbers reflect the *total* mine count across all neighbours.
+Classic minesweeper rules apply, left-click to open, right-click to flag, middle-click to chord. The twist is that cells can stack multiple mines, so flags cycle from 1 to 6 and the hint numbers reflect the *total* mine count across all neighbours.
 
-Three presets (Beginner, Intermediate, Expert) and a fully custom mode with configurable density — which controls how much mines clump together vs spread out.
+Three presets (Beginner, Intermediate, Expert) and a fully custom mode with configurable density, which controls how much mines clump together vs spread out.
 
 ## Controls
 
@@ -20,20 +20,20 @@ Three presets (Beginner, Intermediate, Expert) and a fully custom mode with conf
 
 ## Toolbar
 
-- **Settings** — dropdown with Beginner / Intermediate / Expert presets, or Custom for full control over rows, cols, mine count, max per cell, density, and seed.
-- **Help** — links to the GitHub repo.
-- **Smiley** — click to start a new game.
-- **Timer** — starts on your first click.
-- **Hint** — toggles hint mode. While active, hovering the board shows a dark overlay on the 3×3 area that will be revealed. Click to reveal it — mines get flagged, safe cells get opened.
-- **Give Up** — reveals the entire board.
+- **Settings**: dropdown with Beginner / Intermediate / Expert presets, or Custom for full control over rows, cols, mine count, max per cell, density, and seed.
+- **Help**: links to the GitHub repo.
+- **Smiley**: click to start a new game.
+- **Timer**: starts on your first click.
+- **Hint**: toggles hint mode. While active, hovering the board shows a dark overlay on the 3×3 area that will be revealed. Click to reveal it — mines get flagged, safe cells get opened.
+- **Give Up**: reveals the entire board.
 
 ## Tech
 
-- **TypeScript** + **Vite** — zero-framework static site, canvas 2D rendering
-- **Engine/UI split** — game logic is pure functions with no DOM dependency, tested with Vitest
+- **TypeScript** + **Vite**: zero-framework static site, canvas 2D rendering
+- **Engine/UI split**: game logic is pure functions with no DOM dependency, tested with Vitest
 - **Spritesheet rendering** with canvas fallback if the image fails to load
-- **Seeded PRNG** (Mulberry32) — same seed = same board, every time
-- **Pixel-scaled sprites** — 16×16 tiles integer-scaled to fill the viewport, Win95 aesthetic with the [Pixelated MS Sans Serif](https://fontstruct.com/fontstructions/show/1384746) font
+- **Seeded PRNG** (Mulberry32): same seed = same board, every time
+- **Pixel-scaled sprites**: 16×16 tiles integer-scaled to fill the viewport, Win95 aesthetic with the [Pixelated MS Sans Serif](https://fontstruct.com/fontstructions/show/1384746) font
 
 ```bash
 npm install
