@@ -13,3 +13,14 @@ export type {
   Pos,
 } from "./types";
 export { GameStatus, DEFAULT_CONFIG } from "./types";
+export {
+  solve,
+  isNoGuess,
+  solveStep,
+  initializeSolver,
+} from "./solver";
+export type {
+  SolverCell,
+  SolverStep,
+  SolverResult,
+} from "./solver";
