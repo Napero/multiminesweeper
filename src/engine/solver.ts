@@ -180,11 +180,12 @@ export function solveStep(
           }
         }
         
-        // If remaining mines equals min possible (each unknown has 1), mark all as having 1
-        // Only if this is the ONLY way to satisfy the constraint
+        // If remaining mines equals min possible and all unknowns must have at least 1 mine,
+        // each unknown must have exactly 1 mine
         if (remainingMines === minPossible && unknownNeighbors.length > 1) {
-          // This is a weak inference, skip it for now
-          // We'd need more sophisticated constraint solving
+          // Check if this is the only valid assignment
+          // This only works if we can confirm each cell must have at least 1 mine
+          // For now, we skip this as it requires additional constraint checking
         }
       }
     }

@@ -144,8 +144,8 @@ describe("solve", () => {
     
     const result = solve(game.grid, 10, 10);
     
-    // Progress should be partial but not complete
-    // (unless we got really lucky with the mine placement)
+    // Progress can be 0 if the opened cells don't provide enough constraints
+    // (which is expected when only boundary hints are visible)
     expect(result.progress).toBeGreaterThanOrEqual(0);
     expect(result.progress).toBeLessThanOrEqual(1);
   });
@@ -264,6 +264,7 @@ describe("solver integration with Game", () => {
     const result = solve(game.grid, game.rows, game.cols);
     
     expect(result).toBeDefined();
+    // Progress depends on what information is exposed after the first click
     expect(result.progress).toBeGreaterThanOrEqual(0);
     expect(result.progress).toBeLessThanOrEqual(1);
   });
