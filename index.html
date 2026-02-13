@@ -188,6 +188,8 @@
         <button class="preset" data-preset="expert">Expert</button>
         <button class="preset" data-preset="nightmare">Nightmare</button>
         <hr>
+        <button class="preset" data-preset="hard-negative">Hard (negative)</button>
+        <hr>
         <button class="preset" data-preset="custom">Custom…</button>
       </div>
     </div>
@@ -210,6 +212,7 @@
       <label>Max/cell <input id="opt-max" type="number" value="6" min="1" max="6"></label>
       <label>Density <input id="opt-density" type="range" min="0" max="100" value="60"> <span id="density-val">0.60</span></label>
       <label>Seed <input id="opt-seed" type="text" value="" placeholder="random"></label>
+      <label>Negative mines <input id="opt-negative" type="checkbox"></label>
       <div class="btn-row">
         <button id="custom-cancel">Cancel</button>
         <button id="custom-ok">Start</button>

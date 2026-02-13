@@ -44,6 +44,7 @@ export class Game {
     this.safeCellCount = 0;
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
+        // A "safe" cell has no mines (positive or negative)
         if (this.grid[r][c].mineCount === 0) this.safeCellCount++;
       }
     }
@@ -77,7 +78,7 @@ export class Game {
       mineCount: gameOver || c.opened ? c.mineCount : null,
       exploded,
       wrongMarker:
-        lost && !c.opened && c.markerCount > 0 && c.mineCount === 0,
+        lost && !c.opened && c.markerCount !== 0 && c.mineCount === 0,
     };
   }
 
@@ -91,30 +92,47 @@ export class Game {
     return this.config.minesTotal - markers;
   }
 
+  /** Min marker value (negative of maxMinesPerCell in negative mode, 0 otherwise) */
+  get minMarker(): number {
+    return this.config.negativeMines ? -this.config.maxMinesPerCell : 0;
+  }
+
+  /** Max marker value */
+  get maxMarker(): number {
+    return this.config.maxMinesPerCell;
+  }
+
   mineDistribution(): { group: number; total: number; flagged: number; remaining: number }[] {
-    const totals = new Array(7).fill(0);
-    const flagged = new Array(7).fill(0);
+    const max = this.config.maxMinesPerCell;
+    const min = this.config.negativeMines ? -max : 1;
+
+    // Use offset arrays: index = group - min
+    const range = max - min + 1;
+    const totals = new Array(range).fill(0);
+    const flagged = new Array(range).fill(0);
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         const cell = this.grid[r][c];
-        if (cell.mineCount >= 1 && cell.mineCount <= 6) {
-          totals[cell.mineCount]++;
+        if (cell.mineCount !== 0 && cell.mineCount >= min && cell.mineCount <= max) {
+          totals[cell.mineCount - min]++;
         }
-        if (!cell.opened && cell.markerCount >= 1 && cell.markerCount <= 6) {
-          flagged[cell.markerCount]++;
+        if (!cell.opened && cell.markerCount !== 0 && cell.markerCount >= min && cell.markerCount <= max) {
+          flagged[cell.markerCount - min]++;
         }
       }
     }
 
     const result: { group: number; total: number; flagged: number; remaining: number }[] = [];
-    for (let g = 1; g <= this.config.maxMinesPerCell; g++) {
-      if (totals[g] > 0) {
+    for (let g = min; g <= max; g++) {
+      if (g === 0) continue;
+      const idx = g - min;
+      if (totals[idx] > 0) {
         result.push({
           group: g,
-          total: totals[g],
-          flagged: flagged[g],
-          remaining: totals[g] - flagged[g],
+          total: totals[idx],
+          flagged: flagged[idx],
+          remaining: totals[idx] - flagged[idx],
         });
       }
     }
@@ -137,13 +155,14 @@ export class Game {
     }
 
     const cell = this.grid[row][col];
-    if (cell.opened || cell.markerCount > 0) return [];
+    if (cell.opened || cell.markerCount !== 0) return [];
 
     cell.opened = true;
     this.openedCount++;
     const opened: Pos[] = [{ row, col }];
 
-    if (cell.mineCount > 0) {
+    // Any non-zero mineCount (positive or negative) is a mine → loss
+    if (cell.mineCount !== 0) {
       this.status = GameStatus.Lost;
       this.explodedPos = { row, col };
       return opened;
@@ -154,7 +173,7 @@ export class Game {
       while (queue.length > 0) {
         const p = queue.pop()!;
         const nc = this.grid[p.row][p.col];
-        if (nc.opened || nc.markerCount > 0) continue;
+        if (nc.opened || nc.markerCount !== 0 || nc.mineCount !== 0) continue;
         nc.opened = true;
         this.openedCount++;
         opened.push(p);
@@ -168,12 +187,36 @@ export class Game {
     return opened;
   }
 
+  /** Right-click: cycle marker upward (0 → 1 → 2 → … → max → 0) */
   cycleMarker(row: number, col: number): void {
     if (this.status !== GameStatus.Playing) return;
     if (!this.inBounds(row, col)) return;
     const cell = this.grid[row][col];
     if (cell.opened) return;
-    cell.markerCount = (cell.markerCount + 1) % (this.config.maxMinesPerCell + 1);
+    const max = this.config.maxMinesPerCell;
+    if (cell.markerCount >= max) {
+      cell.markerCount = 0;
+    } else {
+      cell.markerCount++;
+      // Skip 0 when going up (0 → 1)
+      if (cell.markerCount === 0) cell.markerCount = 1;
+    }
+  }
+
+  /** Shift+right-click: cycle marker downward (0 → -1 → -2 → … → -max → 0) */
+  cycleMarkerDown(row: number, col: number): void {
+    if (this.status !== GameStatus.Playing) return;
+    if (!this.inBounds(row, col)) return;
+    const cell = this.grid[row][col];
+    if (cell.opened) return;
+    const min = this.config.negativeMines ? -this.config.maxMinesPerCell : 0;
+    if (cell.markerCount <= min) {
+      cell.markerCount = 0;
+    } else {
+      cell.markerCount--;
+      // Skip 0 when going down (0 → -1)
+      if (cell.markerCount === 0) cell.markerCount = -1;
+    }
   }
 
   // Open unmarked neighbours if marker sum matches hint
@@ -224,7 +267,7 @@ export class Game {
     for (const pos of targets) {
       const c = this.grid[pos.row][pos.col];
       if (c.opened) continue;
-      if (c.mineCount > 0) {
+      if (c.mineCount !== 0) {
         c.markerCount = c.mineCount;
       } else {
         this.openSafe(pos.row, pos.col);
@@ -236,7 +279,7 @@ export class Game {
   // Open a cell that's known to be safe (no lose check, just flood fill)
   private openSafe(row: number, col: number): void {
     const cell = this.grid[row][col];
-    if (cell.opened || cell.markerCount > 0) return;
+    if (cell.opened || cell.markerCount !== 0) return;
 
     cell.opened = true;
     this.openedCount++;
@@ -246,7 +289,7 @@ export class Game {
       while (queue.length > 0) {
         const p = queue.pop()!;
         const nc = this.grid[p.row][p.col];
-        if (nc.opened || nc.markerCount > 0) continue;
+        if (nc.opened || nc.markerCount !== 0 || nc.mineCount !== 0) continue;
         nc.opened = true;
         this.openedCount++;
         if (nc.hint === 0 && nc.mineCount === 0) {

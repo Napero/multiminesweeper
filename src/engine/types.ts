@@ -7,13 +7,14 @@ export interface GameConfig {
   safeFirstClick: boolean;
   // 0 = spread evenly (max 1 per cell before reuse), 1 = fully random clumping
   density: number;
+  negativeMines: boolean;  // allow cells with negative mine counts
 }
 
 export interface Cell {
-  mineCount: number;   // 0..maxMinesPerCell
+  mineCount: number;   // -maxMinesPerCell..maxMinesPerCell
   opened: boolean;
-  markerCount: number; // 0..6
-  hint: number;        // sum of neighbour mineCount (0..48)
+  markerCount: number; // -max..max (negative in negative mode)
+  hint: number;        // sum of neighbour mineCount (can be negative)
 }
 
 export enum GameStatus {
@@ -48,4 +49,5 @@ export const DEFAULT_CONFIG: GameConfig = {
   seed: Date.now(),
   safeFirstClick: true,
   density: 0.6,
+  negativeMines: false,
 };

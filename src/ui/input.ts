@@ -1,6 +1,6 @@
 export interface InputCallbacks {
   onLeftClick(row: number, col: number): void;
-  onCycleMarker(row: number, col: number): void;
+  onCycleMarker(row: number, col: number, shift: boolean): void;
   onChord(row: number, col: number): void;
 }
 
@@ -41,7 +41,7 @@ export class InputHandler {
     switch (e.button) {
       case 0: this.callbacks.onLeftClick(pos.row, pos.col); break;
       case 1: this.callbacks.onChord(pos.row, pos.col); break;
-      case 2: this.callbacks.onCycleMarker(pos.row, pos.col); break;
+      case 2: this.callbacks.onCycleMarker(pos.row, pos.col, e.shiftKey); break;
     }
   };
 }

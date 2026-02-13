@@ -69,6 +69,7 @@ export function placeMines(
     }
   }
 
+  // Place positive mines
   let placed = 0;
   while (placed < minesTotal) {
     let target: Pos | null = null;
@@ -97,6 +98,57 @@ export function placeMines(
     } else if (cell.mineCount >= maxMinesPerCell) {
       // Full, remove from partial
       removeFromArray(partial, target);
+    }
+  }
+
+  // Place negative mines (if enabled)
+  if (config.negativeMines) {
+    // Re-collect eligible cells for negative placement
+    // Negative mines go on cells that currently have mineCount === 0
+    const negEligible: Pos[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!excludeSet.has(`${r},${c}`) && grid[r][c].mineCount === 0) {
+          negEligible.push({ row: r, col: c });
+        }
+      }
+    }
+    shuffle(negEligible, rng);
+
+    const negEmpty: Pos[] = [...negEligible];      // mineCount === 0
+    const negPartial: Pos[] = [];                   // -max < mineCount < 0
+
+    // Negative mine count: proportional to positive mines
+    // Roughly 30% of minesTotal as negative mines, capped by available cells
+    const negTotal = Math.min(
+      Math.floor(minesTotal * 0.3),
+      negEligible.length * maxMinesPerCell,
+    );
+
+    let negPlaced = 0;
+    while (negPlaced < negTotal) {
+      let target: Pos | null = null;
+
+      if (rng() < density && negPartial.length > 0) {
+        target = pickRandom(negPartial);
+      } else if (negEmpty.length > 0) {
+        target = pickRandom(negEmpty);
+      } else if (negPartial.length > 0) {
+        target = pickRandom(negPartial);
+      } else {
+        break;
+      }
+
+      const cell = grid[target.row][target.col];
+      cell.mineCount--;
+      negPlaced++;
+
+      if (cell.mineCount === -1) {
+        removeFromArray(negEmpty, target);
+        negPartial.push(target);
+      } else if (cell.mineCount <= -maxMinesPerCell) {
+        removeFromArray(negPartial, target);
+      }
     }
   }
 

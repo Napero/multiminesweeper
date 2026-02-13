@@ -13,6 +13,7 @@ const PRESETS: Record<string, Partial<GameConfig>> = {
   hard:         { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6 },
   expert:       { rows: 16, cols: 30, minesTotal: 250, maxMinesPerCell: 6, density: 0.6 },
   nightmare:    { rows: 20, cols: 35, minesTotal: 450, maxMinesPerCell: 6, density: 0.45 },
+  "hard-negative": { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, negativeMines: true },
 };
 
 export function readConfigFromModal(): Partial<GameConfig> {
@@ -25,6 +26,8 @@ export function readConfigFromModal(): Partial<GameConfig> {
   const seedStr = seedEl?.value.trim() ?? "";
   const seed = seedStr === "" ? Date.now() : hashString(seedStr);
   const density = val("opt-density", 60) / 100;
+  const negEl = document.getElementById("opt-negative") as HTMLInputElement | null;
+  const negativeMines = negEl?.checked ?? false;
 
   return {
     rows: val("opt-rows", 16),
@@ -33,6 +36,7 @@ export function readConfigFromModal(): Partial<GameConfig> {
     maxMinesPerCell: val("opt-max", 6),
     seed,
     density,
+    negativeMines,
   };
 }
 
@@ -230,9 +234,13 @@ export class App {
           if (this.game.status !== GameStatus.Playing) this.stopTimer();
           this.render();
         },
-        onCycleMarker: (r, c) => {
+        onCycleMarker: (r, c, shift) => {
           this.startTimer();
-          this.game.cycleMarker(r, c);
+          if (shift) {
+            this.game.cycleMarkerDown(r, c);
+          } else {
+            this.game.cycleMarker(r, c);
+          }
           this.render();
         },
         onChord: (r, c) => {
@@ -384,16 +392,22 @@ export class App {
     let x = 0;
     for (const { group, total, flagged, remaining } of dist) {
       const sy = (h - spriteSize) / 2;
+      const abs = Math.abs(group);
 
-      if (this.sheet && SPRITE_FLAG[group]) {
-        const sprite = SPRITE_BOMB[group] as SpriteRect;
-        ctx.drawImage(
-          this.sheet,
-          sprite.x, sprite.y, sprite.w, sprite.h,
-          x, sy, spriteSize, spriteSize,
-        );
+      if (this.sheet && SPRITE_BOMB[abs]) {
+        const sprite = SPRITE_BOMB[abs] as SpriteRect;
+        if (group < 0) {
+          // Invert for negative bombs
+          this.drawInvertedToCtx(ctx, this.sheet, sprite, x, sy, spriteSize, spriteSize);
+        } else {
+          ctx.drawImage(
+            this.sheet,
+            sprite.x, sprite.y, sprite.w, sprite.h,
+            x, sy, spriteSize, spriteSize,
+          );
+        }
       } else {
-        drawBomb(ctx, group, x, sy, spriteSize, spriteSize);
+        drawBomb(ctx, abs, x, sy, spriteSize, spriteSize);
       }
 
       const textX = x + spriteSize + 3;
@@ -405,5 +419,27 @@ export class App {
 
       x += entryW;
     }
+  }
+
+  /** Helper to draw an inverted sprite onto a given context (preserving transparency). */
+  private drawInvertedToCtx(
+    ctx: CanvasRenderingContext2D,
+    sheet: HTMLImageElement,
+    sprite: SpriteRect,
+    dx: number, dy: number, dw: number, dh: number,
+  ): void {
+    const tmp = document.createElement("canvas");
+    tmp.width = sprite.w;
+    tmp.height = sprite.h;
+    const tc = tmp.getContext("2d")!;
+    tc.drawImage(sheet, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, sprite.w, sprite.h);
+    tc.globalCompositeOperation = "difference";
+    tc.fillStyle = "#ffffff";
+    tc.fillRect(0, 0, sprite.w, sprite.h);
+    // Restore original alpha mask: keep result only where the sprite was opaque
+    tc.globalCompositeOperation = "destination-in";
+    tc.drawImage(sheet, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, sprite.w, sprite.h);
+    tc.globalCompositeOperation = "source-over";
+    ctx.drawImage(tmp, 0, 0, sprite.w, sprite.h, dx, dy, dw, dh);
   }
 }

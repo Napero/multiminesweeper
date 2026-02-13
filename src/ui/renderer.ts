@@ -5,10 +5,15 @@ import {
   SPRITE_CELL_CLOSED,
   SPRITE_CELL_OPEN,
   SPRITE_NUM_WIDE,
+  SPRITE_NUM_WIDE_NEG,
   SPRITE_DIGIT_SLIM,
+  SPRITE_DIGIT_SLIM_NEG,
+  SPRITE_MINUS,
   SPRITE_FLAG,
+  SPRITE_FLAG_GENERIC,
   SPRITE_BOMB,
-  SPRITE_BOMB_CROSS,
+  SPRITE_BOMB_GENERIC,
+  SPRITE_CROSS,
   SPRITE_RED_BG,
   CELL_SIZE,
   CELL_HEIGHT,
@@ -28,6 +33,10 @@ export class Renderer {
   private sheet: HTMLImageElement | null;
   scale: number;
 
+  // Off-screen canvas for drawing inverted/flipped sprites
+  private invertCanvas: HTMLCanvasElement;
+  private invertCtx: CanvasRenderingContext2D;
+
   private get useFallback(): boolean {
     return !this.sheet;
   }
@@ -40,6 +49,10 @@ export class Renderer {
     this.ctx = canvas.getContext("2d")!;
     this.sheet = sheet;
     this.scale = scale;
+    this.invertCanvas = document.createElement("canvas");
+    this.invertCanvas.width = 16;
+    this.invertCanvas.height = 16;
+    this.invertCtx = this.invertCanvas.getContext("2d")!;
   }
 
   resize(rows: number, cols: number): void {
@@ -75,52 +88,109 @@ export class Renderer {
     const fb = this.useFallback;
 
     const lost = status === GameStatus.Lost;
+    const mc = view.mineCount ?? 0;
 
     if (view.opened) {
       if (view.exploded) {
+        // Exploded cell: red background + bomb sprite
         if (fb) { drawRedBg(this.ctx, dx, dy, dw, dh); }
         else    { this.drawSprite(SPRITE_RED_BG, dx, dy, dw, dh); }
-        if (view.mineCount && view.mineCount > 0) {
-          if (fb) { drawBomb(this.ctx, view.mineCount, dx, dy, dw, dh); }
-          else    { this.drawSprite(SPRITE_BOMB[view.mineCount], dx, dy, dw, dh); }
+        if (mc !== 0) {
+          this.drawBombSprite(mc, dx, dy, dw, dh, fb);
         }
-      } else if (view.mineCount && view.mineCount > 0) {
-        if (fb) { drawCellOpen(this.ctx, dx, dy, dw, dh); drawBomb(this.ctx, view.mineCount, dx, dy, dw, dh); }
-        else    { this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh); this.drawSprite(SPRITE_BOMB[view.mineCount], dx, dy, dw, dh); }
+      } else if (mc !== 0) {
+        // Opened cell with mine (game over reveal)
+        if (fb) { drawCellOpen(this.ctx, dx, dy, dw, dh); drawBomb(this.ctx, Math.abs(mc), dx, dy, dw, dh); }
+        else    { this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh); this.drawBombSprite(mc, dx, dy, dw, dh, fb); }
       } else {
+        // Normal opened cell with hint
         if (fb) { drawCellOpen(this.ctx, dx, dy, dw, dh); drawHintNumber(this.ctx, view.hint ?? 0, dx, dy, dw, dh); }
         else    { this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh); this.renderHint(view.hint ?? 0, dx, dy, dw, dh); }
       }
     } else {
-      if (lost && view.mineCount && view.mineCount > 0 && view.markerCount === 0) {
-        if (fb) { drawCellOpen(this.ctx, dx, dy, dw, dh); drawBomb(this.ctx, view.mineCount, dx, dy, dw, dh); }
-        else    { this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh); this.drawSprite(SPRITE_BOMB[view.mineCount], dx, dy, dw, dh); }
+      if (lost && mc !== 0 && view.markerCount === 0) {
+        // Game over: reveal unflagged mines
+        if (fb) { drawCellOpen(this.ctx, dx, dy, dw, dh); drawBomb(this.ctx, Math.abs(mc), dx, dy, dw, dh); }
+        else    { this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh); this.drawBombSprite(mc, dx, dy, dw, dh, fb); }
       } else if (view.wrongMarker) {
-        if (fb) { drawCellOpen(this.ctx, dx, dy, dw, dh); drawBombCross(this.ctx, view.markerCount, dx, dy, dw, dh); }
-        else    { this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh); this.drawSprite(SPRITE_BOMB_CROSS[view.markerCount], dx, dy, dw, dh); }
+        // Wrong marker: bomb + cross overlay
+        if (fb) {
+          drawCellOpen(this.ctx, dx, dy, dw, dh);
+          drawBombCross(this.ctx, Math.abs(view.markerCount), dx, dy, dw, dh);
+        } else {
+          this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh);
+          this.drawBombSprite(view.markerCount, dx, dy, dw, dh, false);
+          this.drawSprite(SPRITE_CROSS, dx, dy, dw, dh);
+        }
       } else {
+        // Closed cell, maybe with flag
         if (fb) {
           drawCellClosed(this.ctx, dx, dy, dw, dh);
-          if (view.markerCount > 0) drawFlag(this.ctx, view.markerCount, dx, dy, dw, dh);
+          if (view.markerCount !== 0) drawFlag(this.ctx, Math.abs(view.markerCount), dx, dy, dw, dh);
         } else {
           this.drawSprite(SPRITE_CELL_CLOSED, dx, dy, dw, dh);
-          if (view.markerCount > 0) this.drawSprite(SPRITE_FLAG[view.markerCount], dx, dy, dw, dh);
+          if (view.markerCount !== 0) this.drawFlagSprite(view.markerCount, dx, dy, dw, dh);
         }
       }
+    }
+  }
+
+  /** Draw a bomb sprite. Positive = normal, negative = inverted colors (white bomb). */
+  private drawBombSprite(count: number, dx: number, dy: number, dw: number, dh: number, fb: boolean): void {
+    if (fb) {
+      drawBomb(this.ctx, Math.abs(count), dx, dy, dw, dh);
+      return;
+    }
+    const abs = Math.abs(count);
+    const sprite = SPRITE_BOMB[abs] ?? SPRITE_BOMB_GENERIC;
+    if (count < 0) {
+      this.drawSpriteInverted(sprite, dx, dy, dw, dh);
+    } else {
+      this.drawSprite(sprite, dx, dy, dw, dh);
+    }
+  }
+
+  /** Draw a flag sprite. Positive = normal, negative = inverted + flipped vertically. */
+  private drawFlagSprite(count: number, dx: number, dy: number, dw: number, dh: number): void {
+    const abs = Math.abs(count);
+    const sprite = SPRITE_FLAG[abs] ?? SPRITE_FLAG_GENERIC;
+    if (count < 0) {
+      this.drawSpriteInvertedFlipped(sprite, dx, dy, dw, dh);
+    } else {
+      this.drawSprite(sprite, dx, dy, dw, dh);
     }
   }
 
   private renderHint(hint: number, dx: number, dy: number, dw: number, dh: number): void {
     if (hint === 0) return;
 
-    if (hint <= 9) {
-      this.drawSprite(SPRITE_NUM_WIDE[hint], dx, dy, dw, dh);
+    const abs = Math.abs(hint);
+    const neg = hint < 0;
+
+    if (abs <= 9) {
+      if (neg) {
+        // Use the negative wide number sprite (keyed by abs value)
+        this.drawSprite(SPRITE_NUM_WIDE_NEG[abs], dx, dy, dw, dh);
+      } else {
+        this.drawSprite(SPRITE_NUM_WIDE[abs], dx, dy, dw, dh);
+      }
     } else {
-      const tens = Math.floor(hint / 10);
-      const ones = hint % 10;
-      const halfW = dw / 2;
-      this.drawSprite(SPRITE_DIGIT_SLIM[tens], dx, dy, halfW, dh);
-      this.drawSprite(SPRITE_DIGIT_SLIM[ones], dx + halfW, dy, halfW, dh);
+      // Two-digit number: use slim digits
+      const tens = Math.floor(abs / 10);
+      const ones = abs % 10;
+      const slimSet = neg ? SPRITE_DIGIT_SLIM_NEG : SPRITE_DIGIT_SLIM;
+
+      if (neg) {
+        // Three parts: minus, tens, ones — split cell into thirds
+        const thirdW = dw / 3;
+        this.drawSprite(SPRITE_MINUS, dx, dy, thirdW, dh);
+        this.drawSprite(slimSet[tens], dx + thirdW, dy, thirdW, dh);
+        this.drawSprite(slimSet[ones], dx + thirdW * 2, dy, thirdW, dh);
+      } else {
+        const halfW = dw / 2;
+        this.drawSprite(slimSet[tens], dx, dy, halfW, dh);
+        this.drawSprite(slimSet[ones], dx + halfW, dy, halfW, dh);
+      }
     }
   }
 
@@ -143,6 +213,61 @@ export class Renderer {
       dw,
       dh,
     );
+  }
+
+  /** Draw a sprite with inverted colors (preserving transparency). */
+  private drawSpriteInverted(
+    sprite: SpriteRect,
+    dx: number, dy: number, dw: number, dh: number,
+  ): void {
+    if (!this.sheet) return;
+    const ic = this.invertCanvas;
+    const ictx = this.invertCtx;
+    ic.width = sprite.w;
+    ic.height = sprite.h;
+    ictx.clearRect(0, 0, sprite.w, sprite.h);
+    ictx.drawImage(this.sheet, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, sprite.w, sprite.h);
+    // Invert via difference blend (makes transparent pixels white)
+    ictx.globalCompositeOperation = "difference";
+    ictx.fillStyle = "#ffffff";
+    ictx.fillRect(0, 0, sprite.w, sprite.h);
+    // Restore original alpha mask: keep result only where the sprite was opaque
+    ictx.globalCompositeOperation = "destination-in";
+    ictx.drawImage(this.sheet, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, sprite.w, sprite.h);
+    ictx.globalCompositeOperation = "source-over";
+    this.ctx.drawImage(ic, 0, 0, sprite.w, sprite.h, dx, dy, dw, dh);
+  }
+
+  /** Draw a sprite with inverted colors AND flipped vertically (preserving transparency). */
+  private drawSpriteInvertedFlipped(
+    sprite: SpriteRect,
+    dx: number, dy: number, dw: number, dh: number,
+  ): void {
+    if (!this.sheet) return;
+    const ic = this.invertCanvas;
+    const ictx = this.invertCtx;
+    ic.width = sprite.w;
+    ic.height = sprite.h;
+    ictx.clearRect(0, 0, sprite.w, sprite.h);
+    // Flip vertically
+    ictx.save();
+    ictx.translate(0, sprite.h);
+    ictx.scale(1, -1);
+    ictx.drawImage(this.sheet, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, sprite.w, sprite.h);
+    ictx.restore();
+    // Invert via difference blend (makes transparent pixels white)
+    ictx.globalCompositeOperation = "difference";
+    ictx.fillStyle = "#ffffff";
+    ictx.fillRect(0, 0, sprite.w, sprite.h);
+    // Restore original alpha mask from the flipped sprite
+    ictx.globalCompositeOperation = "destination-in";
+    ictx.save();
+    ictx.translate(0, sprite.h);
+    ictx.scale(1, -1);
+    ictx.drawImage(this.sheet, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, sprite.w, sprite.h);
+    ictx.restore();
+    ictx.globalCompositeOperation = "source-over";
+    this.ctx.drawImage(ic, 0, 0, sprite.w, sprite.h, dx, dy, dw, dh);
   }
 
   renderHintOverlay(row: number, col: number, rows: number, cols: number): void {

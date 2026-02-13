@@ -62,6 +62,7 @@ describe("placeMines", () => {
       seed: 42,
       safeFirstClick: false,
       density: 0.5,
+      negativeMines: false,
     };
     const grid = createEmptyGrid(10, 10);
     placeMines(grid, config);
@@ -79,6 +80,7 @@ describe("placeMines", () => {
       seed: 123,
       safeFirstClick: false,
       density: 1,
+      negativeMines: false,
     };
     const grid = createEmptyGrid(5, 5);
     placeMines(grid, config);
@@ -98,6 +100,7 @@ describe("placeMines", () => {
       seed: 99,
       safeFirstClick: false,
       density: 1,
+      negativeMines: false,
     };
     const exclude = [{ row: 2, col: 2 }, { row: 2, col: 3 }];
     const grid = createEmptyGrid(5, 5);
@@ -115,6 +118,7 @@ describe("placeMines", () => {
       seed: 777,
       safeFirstClick: false,
       density: 0.5,
+      negativeMines: false,
     };
     const g1 = createEmptyGrid(8, 8);
     placeMines(g1, config);
