@@ -104,8 +104,14 @@ export class Renderer {
         else    { this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh); this.drawBombSprite(mc, dx, dy, dw, dh, fb); }
       } else {
         // Normal opened cell with hint
-        if (fb) { drawCellOpen(this.ctx, dx, dy, dw, dh); drawHintNumber(this.ctx, view.hint ?? 0, dx, dy, dw, dh); }
-        else    { this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh); this.renderHint(view.hint ?? 0, dx, dy, dw, dh); }
+        if (fb) {
+          drawCellOpen(this.ctx, dx, dy, dw, dh);
+          const h = view.hint ?? 0;
+          if (h !== 0 || view.adjacentMines) drawHintNumber(this.ctx, h, dx, dy, dw, dh, view.adjacentMines);
+        } else {
+          this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh);
+          this.renderHint(view.hint ?? 0, view.adjacentMines, dx, dy, dw, dh);
+        }
       }
     } else {
       if (lost && mc !== 0 && view.markerCount === 0) {
@@ -161,8 +167,13 @@ export class Renderer {
     }
   }
 
-  private renderHint(hint: number, dx: number, dy: number, dw: number, dh: number): void {
-    if (hint === 0) return;
+  private renderHint(hint: number, adjacentMines: boolean, dx: number, dy: number, dw: number, dh: number): void {
+    if (hint === 0) {
+      if (adjacentMines) {
+        this.drawSprite(SPRITE_NUM_WIDE_NEG[0], dx, dy, dw, dh);
+      }
+      return;
+    }
 
     const abs = Math.abs(hint);
     const neg = hint < 0;

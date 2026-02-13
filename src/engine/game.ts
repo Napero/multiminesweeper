@@ -79,6 +79,7 @@ export class Game {
       exploded,
       wrongMarker:
         lost && !c.opened && c.markerCount !== 0 && c.mineCount === 0,
+      adjacentMines: c.adjacentMines,
     };
   }
 

@@ -21,7 +21,7 @@ export function createEmptyGrid(rows: number, cols: number): Cell[][] {
   for (let r = 0; r < rows; r++) {
     const row: Cell[] = [];
     for (let c = 0; c < cols; c++) {
-      row.push({ mineCount: 0, opened: false, markerCount: 0, hint: 0 });
+      row.push({ mineCount: 0, opened: false, markerCount: 0, hint: 0, adjacentMines: false });
     }
     grid.push(row);
   }
@@ -160,10 +160,14 @@ export function computeHints(grid: Cell[][], rows: number, cols: number): void {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       let sum = 0;
+      let hasAdj = false;
       for (const n of neighbours(r, c, rows, cols)) {
-        sum += grid[n.row][n.col].mineCount;
+        const mc = grid[n.row][n.col].mineCount;
+        sum += mc;
+        if (mc !== 0) hasAdj = true;
       }
       grid[r][c].hint = sum;
+      grid[r][c].adjacentMines = hasAdj;
     }
   }
 }

@@ -72,8 +72,9 @@ export function drawHintNumber(
   ctx: CanvasRenderingContext2D,
   hint: number,
   dx: number, dy: number, dw: number, dh: number,
+  showZero = false,
 ): void {
-  if (hint === 0) return;
+  if (hint === 0 && !showZero) return;
   const text = String(hint);
   ctx.fillStyle = hintColor(hint);
   ctx.font = `bold ${Math.round(dh * 0.75)}px "Courier New", monospace`;

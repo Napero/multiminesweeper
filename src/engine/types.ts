@@ -15,6 +15,7 @@ export interface Cell {
   opened: boolean;
   markerCount: number; // -max..max (negative in negative mode)
   hint: number;        // sum of neighbour mineCount (can be negative)
+  adjacentMines: boolean; // true if any neighbour has mineCount !== 0
 }
 
 export enum GameStatus {
@@ -33,6 +34,7 @@ export interface CellView {
   mineCount: number | null;
   exploded: boolean;        // the cell the player clicked to lose
   wrongMarker: boolean;     // wrong marker shown on game-over
+  adjacentMines: boolean;   // true if any neighbour has mineCount !== 0
 }
 
 export interface Pos {
