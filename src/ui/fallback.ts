@@ -14,7 +14,7 @@ const COL_RED = "#ff0000";
 const COL_BLACK = "#000000";
 
 const HINT_COLORS: Record<number, string> = {
-  0: "transparent",
+  0: "#ff8000",
   1: "#0000ff",
   2: "#008000",
   3: "#ff0000",
@@ -183,4 +183,12 @@ export function drawBombCross(
   ctx.moveTo(dx + dw - margin, dy + margin);
   ctx.lineTo(dx + margin, dy + dh - margin);
   ctx.stroke();
+}
+
+export function drawMisflag(
+  ctx: CanvasRenderingContext2D,
+  count: number,
+  dx: number, dy: number, dw: number, dh: number,
+): void {
+  
 }
