@@ -282,11 +282,12 @@ export class App {
           const cell = this.game.cell(r, c);
           if (cell.opened) return;
           // clamp to allowed range
-          const max = this.game.config.maxMinesPerCell;
-          const v = Math.max(0, Math.min(max, value));
+          const v = Math.max(this.game.minMarker, Math.min(this.game.maxMarker, value));
           cell.markerCount = v;
           this.render();
         },
+        getMinMarker: () => this.game.minMarker,
+        getMaxMarker: () => this.game.maxMarker,
         onSpace: (r, c) => {
           this.startTimer();
           const cell = this.game.cell(r, c);

@@ -186,21 +186,15 @@ export class Renderer {
         this.drawSprite(SPRITE_NUM_WIDE[abs], dx, dy, dw, dh);
       }
     } else {
-      // Two-digit number: use slim digits
+      // Two-digit number: use slim digits in two halves, overlay minus if negative
       const tens = Math.floor(abs / 10);
       const ones = abs % 10;
       const slimSet = neg ? SPRITE_DIGIT_SLIM_NEG : SPRITE_DIGIT_SLIM;
-
+      const halfW = dw / 2;
+      this.drawSprite(slimSet[tens], dx, dy, halfW, dh);
+      this.drawSprite(slimSet[ones], dx + halfW, dy, halfW, dh);
       if (neg) {
-        // Three parts: minus, tens, ones — split cell into thirds
-        const thirdW = dw / 3;
-        this.drawSprite(SPRITE_MINUS, dx, dy, thirdW, dh);
-        this.drawSprite(slimSet[tens], dx + thirdW, dy, thirdW, dh);
-        this.drawSprite(slimSet[ones], dx + thirdW * 2, dy, thirdW, dh);
-      } else {
-        const halfW = dw / 2;
-        this.drawSprite(slimSet[tens], dx, dy, halfW, dh);
-        this.drawSprite(slimSet[ones], dx + halfW, dy, halfW, dh);
+        this.drawSprite(SPRITE_MINUS, dx, dy, dw, dh);
       }
     }
   }

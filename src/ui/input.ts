@@ -4,6 +4,8 @@ export interface InputCallbacks {
   onSpace?(row: number, col: number): void;
   onChord(row: number, col: number): void;
   onSetMarker?(row: number, col: number, value: number): void;
+  getMinMarker?(): number;
+  getMaxMarker?(): number;
 }
 
 interface CellPos {
@@ -147,8 +149,9 @@ export class InputHandler {
     const dy = this.touchStartY - t.clientY; // upward drag increases value
     const stepPx = 20; // pixels per step
     const steps = Math.round(dy / stepPx);
-    const maxVal = 6;
-    const val = Math.max(0, Math.min(maxVal, this.markingStartValue + steps));
+    const minVal = this.callbacks.getMinMarker ? this.callbacks.getMinMarker() : 0;
+    const maxVal = this.callbacks.getMaxMarker ? this.callbacks.getMaxMarker() : 6;
+    const val = Math.max(minVal, Math.min(maxVal, this.markingStartValue + steps));
     if (val !== this.currentMarkValue && this.touchStartPos) {
       this.currentMarkValue = val;
       if (this.callbacks.onSetMarker) this.callbacks.onSetMarker(this.touchStartPos.row, this.touchStartPos.col, this.currentMarkValue);
