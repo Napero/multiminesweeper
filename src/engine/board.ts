@@ -39,6 +39,7 @@ export function placeMines(
   excludePositions: Pos[] = [],
 ): Cell[][] {
   const { rows, cols, minesTotal, maxMinesPerCell, seed } = config;
+  const maxMinesPerCellCapped = Math.max(1, Math.min(6, maxMinesPerCell));
   const density = Math.max(0, Math.min(1, config.density ?? 0.5));
   const rng = createRng(seed);
 
@@ -95,7 +96,7 @@ export function placeMines(
       // Was in empty, move to partial
       removeFromArray(empty, target);
       partial.push(target);
-    } else if (cell.mineCount >= maxMinesPerCell) {
+    } else if (cell.mineCount >= maxMinesPerCellCapped) {
       // Full, remove from partial
       removeFromArray(partial, target);
     }
@@ -122,7 +123,7 @@ export function placeMines(
     // Roughly 30% of minesTotal as negative mines, capped by available cells
     const negTotal = Math.min(
       Math.floor(minesTotal * 0.3),
-      negEligible.length * maxMinesPerCell,
+      negEligible.length * maxMinesPerCellCapped,
     );
 
     let negPlaced = 0;
@@ -146,7 +147,7 @@ export function placeMines(
       if (cell.mineCount === -1) {
         removeFromArray(negEmpty, target);
         negPartial.push(target);
-      } else if (cell.mineCount <= -maxMinesPerCell) {
+      } else if (cell.mineCount <= -maxMinesPerCellCapped) {
         removeFromArray(negPartial, target);
       }
     }

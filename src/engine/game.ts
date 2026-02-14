@@ -78,7 +78,7 @@ export class Game {
       mineCount: gameOver || c.opened ? c.mineCount : null,
       exploded,
       wrongMarker:
-        lost && !c.opened && c.markerCount !== 0 && c.mineCount === 0,
+        lost && !c.opened && c.markerCount !== c.mineCount,
       adjacentMines: c.adjacentMines,
     };
   }

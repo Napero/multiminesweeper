@@ -4,7 +4,7 @@
 // Row 1: 7w..9w, slim digits 1s..9s,0s (8px each @ x=48)
 // Row 2: flag1..flag6, flag_generic, (empty)
 // Row 3: bomb1..bomb6, bomb_generic, cross_overlay
-// Row 4: (empty ×8)
+// Row 4: misflag1..misflag6, misflag_generic (empty)
 // Row 5: question_mark, red_bg, (empty ×6)
 // Row 6: 0neg, -1w..-7w (negative wide numbers, inverted colours)
 // Row 7: -8w, -9w, slim neg 1s..9s,0s (8px each @ x=32), minus_overlay
@@ -116,6 +116,17 @@ export const SPRITE_BOMB: Record<number, SpriteRect> = {
   6: tile(5, 3),
 };
 export const SPRITE_BOMB_GENERIC: SpriteRect = tile(6, 3);
+
+// Positive misflags (1–6)v
+export const SPRITE_MISFLAG: Record<number, SpriteRect> = {
+  1: tile(0, 4),
+  2: tile(1, 4),
+  3: tile(2, 4),
+  4: tile(3, 4),
+  5: tile(4, 4),
+  6: tile(5, 4),
+};
+export const SPRITE_MISFLAG_GENERIC: SpriteRect = tile(6, 4);
 
 // Cross overlay (drawn on top of bomb sprite for wrong markers)
 export const SPRITE_CROSS: SpriteRect = tile(7, 3);

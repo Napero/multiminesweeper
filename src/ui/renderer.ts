@@ -13,6 +13,8 @@ import {
   SPRITE_FLAG_GENERIC,
   SPRITE_BOMB,
   SPRITE_BOMB_GENERIC,
+  SPRITE_MISFLAG,
+  SPRITE_MISFLAG_GENERIC,
   SPRITE_CROSS,
   SPRITE_RED_BG,
   CELL_SIZE,
@@ -25,6 +27,7 @@ import {
   drawHintNumber,
   drawFlag,
   drawBomb,
+  drawMisflag,
   drawBombCross,
 } from "./fallback";
 
@@ -119,14 +122,26 @@ export class Renderer {
         if (fb) { drawCellOpen(this.ctx, dx, dy, dw, dh); drawBomb(this.ctx, Math.abs(mc), dx, dy, dw, dh); }
         else    { this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh); this.drawBombSprite(mc, dx, dy, dw, dh, fb); }
       } else if (view.wrongMarker) {
-        // Wrong marker: bomb + cross overlay
-        if (fb) {
-          drawCellOpen(this.ctx, dx, dy, dw, dh);
-          drawBombCross(this.ctx, Math.abs(view.markerCount), dx, dy, dw, dh);
+        // Wrong marker, 0 mines: bomb + cross overlay
+        if (view.mineCount === 0) {
+          if (fb) {
+            drawCellOpen(this.ctx, dx, dy, dw, dh);
+            drawBombCross(this.ctx, Math.abs(view.markerCount), dx, dy, dw, dh);
+          } else {
+            this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh);
+            this.drawBombSprite(view.markerCount, dx, dy, dw, dh, false);
+            this.drawSprite(SPRITE_CROSS, dx, dy, dw, dh);
+          }
         } else {
-          this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh);
-          this.drawBombSprite(view.markerCount, dx, dy, dw, dh, false);
-          this.drawSprite(SPRITE_CROSS, dx, dy, dw, dh);
+          if (fb) {
+            drawCellOpen(this.ctx, dx, dy, dw, dh);
+            drawFlag(this.ctx, Math.abs(view.markerCount), dx, dy, dw, dh);
+            drawMisflag(this.ctx, Math.abs(view.mineCount), dx, dy, dw, dh);
+          } else {
+            this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh);
+            this.drawFlagSprite(view.markerCount, dx, dy, dw, dh, false);
+            this.drawMisflagSprite(view.mineCount, dx, dy, dw, dh, false);
+          }
         }
       } else {
         // Closed cell, maybe with flag
@@ -149,6 +164,21 @@ export class Renderer {
     }
     const abs = Math.abs(count);
     const sprite = SPRITE_BOMB[abs] ?? SPRITE_BOMB_GENERIC;
+    if (count < 0) {
+      this.drawSpriteInverted(sprite, dx, dy, dw, dh);
+    } else {
+      this.drawSprite(sprite, dx, dy, dw, dh);
+    }
+  }
+
+  /** Draw a misflag sprite. Positive = normal, negative = inverted colors (white bomb). */
+  private drawMisflagSprite(count: number, dx: number, dy: number, dw: number, dh: number, fb: boolean): void {
+    if (fb) {
+      drawMisflag(this.ctx, Math.abs(count), dx, dy, dw, dh);
+      return;
+    }
+    const abs = Math.abs(count);
+    const sprite = SPRITE_MISFLAG[abs] ?? SPRITE_MISFLAG_GENERIC;
     if (count < 0) {
       this.drawSpriteInverted(sprite, dx, dy, dw, dh);
     } else {
