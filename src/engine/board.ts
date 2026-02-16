@@ -1,4 +1,4 @@
-import { Cell, GameConfig, Pos } from "./types";
+import { Cell, GameConfig, Pos, TopologyMode } from "./types";
 import { createRng } from "./rng";
 
 interface Bucket {
@@ -35,14 +35,101 @@ function pickRandomFromBucket(bucket: Bucket, rng: () => number): Pos {
 }
 
 export function neighbours(row: number, col: number, rows: number, cols: number): Pos[] {
+  return neighboursForTopology(row, col, rows, cols, "plane");
+}
+
+function wrap(v: number, size: number): number {
+  return ((v % size) + size) % size;
+}
+
+function normalizeForTopology(
+  row: number,
+  col: number,
+  rows: number,
+  cols: number,
+  topology: TopologyMode,
+): Pos | null {
+  if (rows <= 0 || cols <= 0) return null;
+
+  switch (topology) {
+    case "plane": {
+      if (row < 0 || row >= rows || col < 0 || col >= cols) return null;
+      return { row, col };
+    }
+    case "cylinder": {
+      if (row < 0 || row >= rows) return null;
+      return { row, col: wrap(col, cols) };
+    }
+    case "torus": {
+      return { row: wrap(row, rows), col: wrap(col, cols) };
+    }
+    case "mobius": {
+      let r = row;
+      let c = col;
+      if (c < 0) {
+        c += cols;
+        r = rows - 1 - r;
+      } else if (c >= cols) {
+        c -= cols;
+        r = rows - 1 - r;
+      }
+      if (r < 0 || r >= rows) return null;
+      return { row: r, col: c };
+    }
+    case "klein": {
+      let r = row;
+      let c = col;
+      if (r < 0) {
+        r += rows;
+        c = cols - 1 - c;
+      } else if (r >= rows) {
+        r -= rows;
+        c = cols - 1 - c;
+      }
+      c = wrap(c, cols);
+      return { row: r, col: c };
+    }
+    case "projective": {
+      let r = row;
+      let c = col;
+      if (c < 0) {
+        c += cols;
+        r = rows - 1 - r;
+      } else if (c >= cols) {
+        c -= cols;
+        r = rows - 1 - r;
+      }
+      if (r < 0) {
+        r += rows;
+        c = cols - 1 - c;
+      } else if (r >= rows) {
+        r -= rows;
+        c = cols - 1 - c;
+      }
+      c = wrap(c, cols);
+      return { row: r, col: c };
+    }
+  }
+}
+
+export function neighboursForTopology(
+  row: number,
+  col: number,
+  rows: number,
+  cols: number,
+  topology: TopologyMode,
+): Pos[] {
   const result: Pos[] = [];
+  const seen = new Set<string>();
   for (let dr = -1; dr <= 1; dr++) {
     for (let dc = -1; dc <= 1; dc++) {
       if (dr === 0 && dc === 0) continue;
-      const r = row + dr;
-      const c = col + dc;
-      if (r >= 0 && r < rows && c >= 0 && c < cols) {
-        result.push({ row: r, col: c });
+      const normalized = normalizeForTopology(row + dr, col + dc, rows, cols, topology);
+      if (!normalized) continue;
+      const key = posKey(normalized);
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(normalized);
       }
     }
   }
@@ -72,6 +159,7 @@ export function placeMines(
   excludePositions: Pos[] = [],
 ): Cell[][] {
   const { rows, cols, minesTotal, maxMinesPerCell, seed } = config;
+  const maxMinesPerCellCapped = Math.max(1, Math.min(6, maxMinesPerCell));
   const density = Math.max(0, Math.min(1, config.density ?? 0.5));
   const rng = createRng(seed);
 
@@ -116,7 +204,7 @@ export function placeMines(
       // Was in empty, move to partial
       removeFromBucket(empty, target);
       addToBucket(partial, target);
-    } else if (cell.mineCount >= maxMinesPerCell) {
+    } else if (cell.mineCount >= maxMinesPerCellCapped) {
       // Full, remove from partial
       removeFromBucket(partial, target);
     }
@@ -144,7 +232,7 @@ export function placeMines(
     // Roughly 30% of minesTotal as negative mines, capped by available cells
     const negTotal = Math.min(
       Math.floor(minesTotal * 0.3),
-      negEligible.length * maxMinesPerCell,
+      negEligible.length * maxMinesPerCellCapped,
     );
 
     let negPlaced = 0;
@@ -168,7 +256,7 @@ export function placeMines(
       if (cell.mineCount === -1) {
         removeFromBucket(negEmpty, target);
         addToBucket(negPartial, target);
-      } else if (cell.mineCount <= -maxMinesPerCell) {
+      } else if (cell.mineCount <= -maxMinesPerCellCapped) {
         removeFromBucket(negPartial, target);
       }
     }
@@ -178,12 +266,17 @@ export function placeMines(
 }
 
 // hint = sum of neighbour mineCount
-export function computeHints(grid: Cell[][], rows: number, cols: number): void {
+export function computeHints(
+  grid: Cell[][],
+  rows: number,
+  cols: number,
+  topology: TopologyMode = "plane",
+): void {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       let sum = 0;
       let hasAdj = false;
-      for (const n of neighbours(r, c, rows, cols)) {
+      for (const n of neighboursForTopology(r, c, rows, cols, topology)) {
         const mc = grid[n.row][n.col].mineCount;
         sum += mc;
         if (mc !== 0) hasAdj = true;

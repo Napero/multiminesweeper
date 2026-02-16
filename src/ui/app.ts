@@ -1,4 +1,4 @@
-import { Game, GameConfig, GameStatus } from "../engine/index";
+import { Game, GameConfig, GameStatus, TopologyMode } from "../engine/index";
 import { Renderer } from "./renderer";
 import { InputHandler } from "./input";
 import { loadSpritesheet } from "../sprites";
@@ -15,6 +15,10 @@ const PRESETS: Record<string, Partial<GameConfig>> = {
   nightmare:    { rows: 20, cols: 35, minesTotal: 450, maxMinesPerCell: 6, density: 0.45 },
   "intermediate-negative": { rows: 16, cols: 16, minesTotal: 60, maxMinesPerCell: 5, density: 0.6, negativeMines: true },
   "hard-negative": { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, negativeMines: true },
+  cylinder: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "cylinder" },
+  torus: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "torus" },
+  mobius: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "mobius" },
+  klein: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "klein" },
 };
 
 export function readConfigFromModal(): Partial<GameConfig> {
@@ -29,15 +33,21 @@ export function readConfigFromModal(): Partial<GameConfig> {
   const density = val("opt-density", 60) / 100;
   const negEl = document.getElementById("opt-negative") as HTMLInputElement | null;
   const negativeMines = negEl?.checked ?? false;
+  const topologyEl = document.getElementById("opt-topology") as HTMLSelectElement | null;
+  const topology = (topologyEl?.value ?? "plane") as TopologyMode;
+  const rows = val("opt-rows", 16);
+  const cols = val("opt-cols", 30);
 
   return {
-    rows: val("opt-rows", 16),
-    cols: val("opt-cols", 30),
+    rows,
+    cols,
     minesTotal: val("opt-mines", 99),
     maxMinesPerCell: val("opt-max", 6),
     seed,
     density,
     negativeMines,
+    topology,
+    safeFirstClick: true,
   };
 }
 
@@ -177,8 +187,9 @@ export class App {
         return;
       }
       const rect = this.canvas.getBoundingClientRect();
-      const pos = this.renderer.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
-      if (!pos) return;
+      const local = this.renderer.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
+      if (!local) return;
+      const pos = local;
       if (!this.hintHoverPos || this.hintHoverPos.row !== pos.row || this.hintHoverPos.col !== pos.col) {
         this.hintHoverPos = pos;
         this.render();
@@ -287,13 +298,16 @@ export class App {
     if (this.input) this.input.detach();
 
     this.game = new Game(this.config);
+
     const scale = this.computeScale();
     this.renderer = new Renderer(this.canvas, this.sheet, scale);
     this.renderer.resize(this.game.rows, this.game.cols);
 
     this.input = new InputHandler(
       this.canvas,
-      (px, py) => this.renderer.pixelToCell(px, py),
+      (px, py) => {
+        return this.renderer.pixelToCell(px, py);
+      },
       {
         onLeftClick: (r, c) => {
           this.startTimer();
@@ -468,7 +482,8 @@ export class App {
     } else if (status === GameStatus.Won) {
       bar.textContent = "Congratulations, you win!";
     } else {
-      bar.textContent = `Mines remaining: ${this.game.remainingMines}`;
+      const topologySuffix = this.game.topology === "plane" ? "" : ` · Topology: ${this.game.topology}`;
+      bar.textContent = `Mines remaining: ${this.game.remainingMines}${topologySuffix}`;
     }
     this.renderBreakdown();
   }
@@ -561,7 +576,8 @@ export class App {
     }
 
     const rect = this.canvas.getBoundingClientRect();
-    const pos = this.renderer.pixelToCell(clientX - rect.left, clientY - rect.top);
+    const local = this.renderer.pixelToCell(clientX - rect.left, clientY - rect.top);
+    const pos = local;
     let next: { row: number; col: number } | null = null;
     if (pos) {
       const cell = this.game.cell(pos.row, pos.col);

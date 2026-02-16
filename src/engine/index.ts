@@ -4,6 +4,7 @@ export {
   placeMines,
   computeHints,
   neighbours,
+  neighboursForTopology,
 } from "./board";
 export { createRng, shuffle } from "./rng";
 export type {
@@ -11,5 +12,6 @@ export type {
   Cell,
   CellView,
   Pos,
+  TopologyMode,
 } from "./types";
 export { GameStatus, DEFAULT_CONFIG } from "./types";

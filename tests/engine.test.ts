@@ -9,6 +9,7 @@ import {
   createEmptyGrid,
   placeMines,
   computeHints,
+  neighboursForTopology,
 } from "../src/engine/index";
 
 // ─── RNG determinism ────────────────────────────────────────────────────────
@@ -48,6 +49,18 @@ describe("neighbours", () => {
   it("returns 5 neighbours for an edge cell", () => {
     expect(neighbours(0, 5, 10, 10)).toHaveLength(5);
   });
+
+  it("torus wraps around both axes", () => {
+    const n = neighboursForTopology(0, 0, 4, 4, "torus");
+    expect(n).toHaveLength(8);
+    expect(n.some((p) => p.row === 3 && p.col === 3)).toBe(true);
+  });
+
+  it("cylinder wraps horizontally only", () => {
+    const n = neighboursForTopology(0, 0, 4, 4, "cylinder");
+    expect(n.some((p) => p.row === 0 && p.col === 3)).toBe(true);
+    expect(n.some((p) => p.row === 3 && p.col === 0)).toBe(false);
+  });
 });
 
 // ─── Mine placement ─────────────────────────────────────────────────────────
@@ -63,6 +76,7 @@ describe("placeMines", () => {
       safeFirstClick: false,
       density: 0.5,
       negativeMines: false,
+      topology: "plane" as const,
     };
     const grid = createEmptyGrid(10, 10);
     placeMines(grid, config);
@@ -81,6 +95,7 @@ describe("placeMines", () => {
       safeFirstClick: false,
       density: 1,
       negativeMines: false,
+      topology: "plane" as const,
     };
     const grid = createEmptyGrid(5, 5);
     placeMines(grid, config);
@@ -101,6 +116,7 @@ describe("placeMines", () => {
       safeFirstClick: false,
       density: 1,
       negativeMines: false,
+      topology: "plane" as const,
     };
     const exclude = [{ row: 2, col: 2 }, { row: 2, col: 3 }];
     const grid = createEmptyGrid(5, 5);
@@ -119,6 +135,7 @@ describe("placeMines", () => {
       safeFirstClick: false,
       density: 0.5,
       negativeMines: false,
+      topology: "plane" as const,
     };
     const g1 = createEmptyGrid(8, 8);
     placeMines(g1, config);
@@ -219,6 +236,7 @@ describe("Game - open & flood fill", () => {
     expect(game.status).not.toBe(GameStatus.Lost);
     expect(game.grid[2][2].mineCount).toBe(0);
   });
+
 });
 
 // ─── Game: cycleMarker ──────────────────────────────────────────────────────

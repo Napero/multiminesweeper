@@ -74,12 +74,24 @@ export class Renderer {
     return { row, col };
   }
 
-  renderBoard(game: Game, pressedCell: { row: number; col: number } | null = null): void {
-    const { rows, cols } = game;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const isPressed = pressedCell !== null && pressedCell.row === r && pressedCell.col === c;
-        this.renderCell(game.cellView(r, c), game.status, isPressed);
+  renderBoard(
+    game: Game,
+    pressedCell: { row: number; col: number } | null = null,
+    viewport?: { originRow: number; originCol: number; rows: number; cols: number },
+  ): void {
+    const originRow = viewport?.originRow ?? 0;
+    const originCol = viewport?.originCol ?? 0;
+    const viewRows = viewport?.rows ?? game.rows;
+    const viewCols = viewport?.cols ?? game.cols;
+
+    for (let vr = 0; vr < viewRows; vr++) {
+      for (let vc = 0; vc < viewCols; vc++) {
+        const gr = originRow + vr;
+        const gc = originCol + vc;
+        if (gr < 0 || gc < 0 || gr >= game.rows || gc >= game.cols) continue;
+        const isPressed = pressedCell !== null && pressedCell.row === gr && pressedCell.col === gc;
+        const view = game.cellView(gr, gc);
+        this.renderCell({ ...view, row: vr, col: vc }, game.status, isPressed);
       }
     }
   }
@@ -288,16 +300,23 @@ export class Renderer {
     this.ctx.drawImage(ic, 0, 0, sprite.w, sprite.h, dx, dy, dw, dh);
   }
 
-  renderHintOverlay(row: number, col: number, rows: number, cols: number): void {
+  renderHintOverlay(
+    row: number,
+    col: number,
+    rows: number,
+    cols: number,
+    originRow = 0,
+    originCol = 0,
+  ): void {
     const ctx = this.ctx;
     ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
     for (let dr = -1; dr <= 1; dr++) {
       for (let dc = -1; dc <= 1; dc++) {
         const r = row + dr;
         const c = col + dc;
-        if (r >= 0 && r < rows && c >= 0 && c < cols) {
-          const dx = c * CELL_SIZE * this.scale;
-          const dy = r * CELL_HEIGHT * this.scale;
+        if (r >= originRow && r < originRow + rows && c >= originCol && c < originCol + cols) {
+          const dx = (c - originCol) * CELL_SIZE * this.scale;
+          const dy = (r - originRow) * CELL_HEIGHT * this.scale;
           const dw = CELL_SIZE * this.scale;
           const dh = CELL_HEIGHT * this.scale;
           ctx.fillRect(dx, dy, dw, dh);

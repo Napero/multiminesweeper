@@ -213,6 +213,11 @@
         <button class="preset" data-preset="intermediate-negative">Intermediate (negative)</button>
         <button class="preset" data-preset="hard-negative">Hard (negative)</button>
         <hr>
+        <button class="preset" data-preset="cylinder">Cylinder topology</button>
+        <button class="preset" data-preset="torus">Torus topology</button>
+        <button class="preset" data-preset="mobius">Möbius strip topology</button>
+        <button class="preset" data-preset="klein">Klein bottle topology</button>
+        <hr>
         <button class="preset" data-preset="custom">Custom…</button>
       </div>
     </div>
@@ -236,6 +241,16 @@
       <label>Density <input id="opt-density" type="range" min="0" max="100" value="60"> <span id="density-val">0.60</span></label>
       <label>Seed <input id="opt-seed" type="text" value="" placeholder="random"></label>
       <label>Negative mines <input id="opt-negative" type="checkbox"></label>
+      <label>Topology
+        <select id="opt-topology" style="width:120px; font-size:11px; font-family:'Pixelated MS Sans Serif', Arial, sans-serif;">
+          <option value="plane">Plane (classic)</option>
+          <option value="cylinder">Cylinder</option>
+          <option value="torus">Torus</option>
+          <option value="mobius">Möbius strip</option>
+          <option value="klein">Klein bottle</option>
+          <option value="projective">Projective plane</option>
+        </select>
+      </label>
       <div class="btn-row">
         <button id="custom-cancel">Cancel</button>
         <button id="custom-ok">Start</button>
@@ -256,6 +271,16 @@
         <li><strong>Middle-click / Tap number:</strong> Chord (open neighbours when marker sum matches number)</li>
         <li><strong>Space:</strong> When hovering: cycles marker on covered cell, chords on opened number</li>
         <li><strong>Mobile (long-press):</strong> Long-press a covered cell to enter marking; drag up/down to set 1–6; release to confirm</li>
+      </ul>
+      <h4 style="margin:6px 0 4px 0;">Modes</h4>
+      <ul style="list-style:none; padding-left:0; margin:0 0 8px 0;">
+        <li><strong>Topologies:</strong> Plane, Cylinder, Torus, Möbius strip, Klein bottle, Projective plane</li>
+      </ul>
+      <h4 style="margin:6px 0 4px 0;">Toolbar</h4>
+      <ul style="list-style:none; padding-left:0; margin:0 0 8px 0;">
+        <li><strong>Settings:</strong> Presets + custom options (including topology)</li>
+        <li><strong>Hint:</strong> Toggle hint targeting for a 3×3 reveal assist</li>
+        <li><strong>Give Up:</strong> Reveal the board immediately</li>
       </ul>
       <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; margin-top:8px;">
         <a href="https://github.com/Napero/multiminesweeper" target="_blank" style="text-decoration:none; color:#000080;">Contribute or give me a star on GitHub! :D</a>

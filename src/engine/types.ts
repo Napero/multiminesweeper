@@ -1,3 +1,11 @@
+export type TopologyMode =
+  | "plane"
+  | "cylinder"
+  | "torus"
+  | "mobius"
+  | "klein"
+  | "projective";
+
 export interface GameConfig {
   rows: number;
   cols: number;
@@ -8,6 +16,7 @@ export interface GameConfig {
   // 0 = spread evenly (max 1 per cell before reuse), 1 = fully random clumping
   density: number;
   negativeMines: boolean;  // allow cells with negative mine counts
+  topology: TopologyMode;
 }
 
 export interface Cell {
@@ -52,4 +61,5 @@ export const DEFAULT_CONFIG: GameConfig = {
   safeFirstClick: true,
   density: 0.6,
   negativeMines: false,
+  topology: "plane",
 };

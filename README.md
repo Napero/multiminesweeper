@@ -12,6 +12,15 @@ Classic minesweeper rules apply, left-click to open, right-click to flag, middle
 
 Five presets (Beginner, Intermediate, Hard, Expert, Nightmare) and a fully custom mode with configurable density, which controls how much mines clump together vs spread out.
 
+Custom mode also supports alternate topologies:
+
+- `plane` (classic)
+- `cylinder` (horizontal wrap)
+- `torus` (wrap both axes)
+- `mobius` (horizontal wrap with flipped rows)
+- `klein` (vertical seam flip)
+- `projective` (both seams flip)
+
 ## Controls
 
 - **Left-click**: open a cell. If it's already open, chord (open neighbours if flags match the number).
