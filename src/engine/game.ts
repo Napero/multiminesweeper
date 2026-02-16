@@ -12,6 +12,7 @@ import {
   computeHints,
   neighbours,
 } from "./board";
+import { solveLogically, SolverResult } from "./solver";
 
 export class Game {
   readonly config: GameConfig;
@@ -309,5 +310,183 @@ export class Game {
     if (this.openedCount === this.safeCellCount) {
       this.status = GameStatus.Won;
     }
+  }
+
+  visibleCells(): CellView[][] {
+    const out: CellView[][] = [];
+    for (let r = 0; r < this.rows; r++) {
+      const row: CellView[] = [];
+      for (let c = 0; c < this.cols; c++) {
+        row.push(this.cellView(r, c));
+      }
+      out.push(row);
+    }
+    return out;
+  }
+
+  solveLogicalStep(maxSearchNodes?: number): SolverResult & { openedCount: number; markedCount: number } {
+    const totals = this.mineDistribution().map((d) => ({ group: d.group, total: d.total }));
+    const result = solveLogically({
+      rows: this.rows,
+      cols: this.cols,
+      cells: this.visibleCells(),
+      maxMinesPerCell: this.config.maxMinesPerCell,
+      negativeMines: this.config.negativeMines,
+      groupTotals: totals,
+      maxSearchNodes,
+    });
+
+    if (result.contradiction || !result.complete) {
+      return { ...result, openedCount: 0, markedCount: 0 };
+    }
+
+    let openedCount = 0;
+    let markedCount = 0;
+
+    for (const m of result.marks) {
+      const cell = this.cell(m.row, m.col);
+      if (!cell.opened && cell.markerCount === 0) {
+        cell.markerCount = m.value;
+        markedCount++;
+      }
+    }
+
+    for (const p of result.opens) {
+      const cell = this.cell(p.row, p.col);
+      if (!cell.opened && cell.markerCount === 0) {
+        const opened = this.open(p.row, p.col);
+        openedCount += opened.length;
+      }
+    }
+
+    return { ...result, openedCount, markedCount };
+  }
+
+  solveLogicalUntilStuck(maxSteps = 200, maxSearchNodes?: number): SolverResult & { steps: number } {
+    let steps = 0;
+    let last: SolverResult = {
+      opens: [],
+      marks: [],
+      stalled: true,
+      contradiction: false,
+      complete: true,
+    };
+
+    while (steps < maxSteps && this.status === GameStatus.Playing) {
+      const step = this.solveLogicalStep(maxSearchNodes);
+      last = step;
+      if (step.contradiction || !step.complete) break;
+      if (step.openedCount === 0 && step.markedCount === 0) break;
+      steps++;
+    }
+
+    return { ...last, steps };
+  }
+
+  guessEducated(): { guessed: boolean; row?: number; col?: number; score?: number } {
+    if (this.status !== GameStatus.Playing) return { guessed: false };
+
+    const min = this.minMarker;
+    const max = this.maxMarker;
+    const candidates: { row: number; col: number; score: number; evidence: number }[] = [];
+
+    let totalUnknown = 0;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        const cell = this.grid[r][c];
+        if (!cell.opened && cell.markerCount === 0) totalUnknown++;
+      }
+    }
+    if (totalUnknown === 0) return { guessed: false };
+
+    const dist = this.mineDistribution();
+    let remainingPackedCells = 0;
+    for (const g of dist) remainingPackedCells += Math.max(0, g.remaining);
+    const globalRisk = Math.max(0, Math.min(1, remainingPackedCells / totalUnknown));
+
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        const cell = this.grid[r][c];
+        if (cell.opened || cell.markerCount !== 0) continue;
+
+        let riskSum = 0;
+        let evidence = 0;
+        for (const n of neighbours(r, c, this.rows, this.cols)) {
+          const clue = this.grid[n.row][n.col];
+          if (!clue.opened) continue;
+
+          let fixedSum = 0;
+          let unknownCount = 0;
+          for (const nn of neighbours(n.row, n.col, this.rows, this.cols)) {
+            const around = this.grid[nn.row][nn.col];
+            if (around.opened) {
+              fixedSum += around.mineCount;
+            } else if (around.markerCount !== 0) {
+              fixedSum += around.markerCount;
+            } else {
+              unknownCount++;
+            }
+          }
+          if (unknownCount === 0) continue;
+
+          const remaining = clue.hint - fixedSum;
+          const boundedRemaining = Math.max(min * unknownCount, Math.min(max * unknownCount, remaining));
+          const localRisk = Math.max(0, Math.min(1, Math.abs(boundedRemaining) / (Math.max(1, max) * unknownCount)));
+          riskSum += localRisk;
+          evidence++;
+        }
+
+        const score = evidence > 0
+          ? (riskSum / evidence) * 0.75 + globalRisk * 0.25
+          : globalRisk + 0.05; // slight penalty for no local information
+
+        candidates.push({ row: r, col: c, score, evidence });
+      }
+    }
+
+    if (candidates.length === 0) return { guessed: false };
+    candidates.sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score;
+      if (a.evidence !== b.evidence) return b.evidence - a.evidence;
+      if (a.row !== b.row) return a.row - b.row;
+      return a.col - b.col;
+    });
+    const best = candidates[0];
+    this.open(best.row, best.col);
+    return { guessed: true, row: best.row, col: best.col, score: best.score };
+  }
+
+  solveAutoWithGuesses(
+    maxCycles = 200,
+    maxLogicalStepsPerCycle = 300,
+    maxSearchNodes?: number,
+  ): SolverResult & { steps: number; neededGuesses: number } {
+    let neededGuesses = 0;
+    let steps = 0;
+    let last: SolverResult = {
+      opens: [],
+      marks: [],
+      stalled: true,
+      contradiction: false,
+      complete: true,
+    };
+
+    for (let i = 0; i < maxCycles && this.status === GameStatus.Playing; i++) {
+      const logical = this.solveLogicalUntilStuck(maxLogicalStepsPerCycle, maxSearchNodes);
+      last = logical;
+      steps += logical.steps;
+
+      if (this.status !== GameStatus.Playing) break;
+      if (logical.contradiction) break;
+      if (!logical.complete) break;
+      if (!logical.stalled) continue;
+
+      const guessed = this.guessEducated();
+      if (!guessed.guessed) break;
+      neededGuesses++;
+      if (this.status !== GameStatus.Playing) break;
+    }
+
+    return { ...last, steps, neededGuesses };
   }
 }

@@ -37,6 +37,20 @@
       image-rendering: pixelated;
       cursor: pointer;
     }
+    #toolbar .temp-btn {
+      min-height: 26px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      border: 2px outset #fff;
+      background: #c0c0c0;
+      cursor: pointer;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+    #toolbar .temp-btn:active {
+      border: 2px inset #fff;
+    }
     #timer {
       font-size: 22px;
       font-family: "Pixelated MS Sans Serif", Arial, monospace;
@@ -223,6 +237,9 @@
     <div class="toolbar-sep"></div>
     <canvas id="btn-hint" width="26" height="26" title="Hint"></canvas>
     <canvas id="btn-giveup" width="26" height="26" title="Give Up"></canvas>
+    <button id="btn-guess" class="temp-btn" title="Make one educated guess">Guess</button>
+    <button id="btn-solve-step" class="temp-btn" title="Apply one no-guess logical solver step">Solve 1</button>
+    <button id="btn-solve-auto" class="temp-btn" title="Run no-guess logical solver until stuck">Solve Auto</button>
   </div>
 
   <!-- Custom config modal -->

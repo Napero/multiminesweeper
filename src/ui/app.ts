@@ -65,6 +65,7 @@ export class App {
   private hintPending = false;
   private hintHoverPos: { row: number; col: number } | null = null;
   private hintCount = 0;
+  private solverNote = "";
   private boardLeftHeld = false;
   private pressedCellPreview: { row: number; col: number } | null = null;
   private helpCloseClickHandler = () => this.closeHelp();
@@ -126,6 +127,9 @@ export class App {
       const btn = new ToolbarButton(helpCanvas, "help", () => this.openHelp());
       await btn.ready;
     }
+    document.getElementById("btn-solve-step")?.addEventListener("click", () => this.solveLogicalStep());
+    document.getElementById("btn-solve-auto")?.addEventListener("click", () => this.solveLogicalUntilStuck());
+    document.getElementById("btn-guess")?.addEventListener("click", () => this.guessEducated());
 
     // Settings dropdown: presets + custom
     document.querySelectorAll("#settings-dropdown .preset").forEach((el) => {
@@ -296,6 +300,7 @@ export class App {
       (px, py) => this.renderer.pixelToCell(px, py),
       {
         onLeftClick: (r, c) => {
+          this.solverNote = "";
           this.startTimer();
           if (this.hintPending) {
             this.hintPending = false;
@@ -316,6 +321,7 @@ export class App {
           this.render();
         },
         onCycleMarker: (r, c, shift) => {
+          this.solverNote = "";
           this.startTimer();
           if (shift) {
             this.game.cycleMarkerDown(r, c);
@@ -325,6 +331,7 @@ export class App {
           this.render();
         },
         onSetMarker: (r, c, value) => {
+          this.solverNote = "";
           this.startTimer();
           const cell = this.game.cell(r, c);
           if (cell.opened) return;
@@ -336,6 +343,7 @@ export class App {
         getMinMarker: () => this.game.minMarker,
         getMaxMarker: () => this.game.maxMarker,
         onSpace: (r, c) => {
+          this.solverNote = "";
           this.startTimer();
           const cell = this.game.cell(r, c);
           if (cell.opened) {
@@ -347,6 +355,7 @@ export class App {
           this.render();
         },
         onChord: (r, c) => {
+          this.solverNote = "";
           this.startTimer();
           this.game.chordOpen(r, c);
           if (this.game.status !== GameStatus.Playing) this.stopTimer();
@@ -361,6 +370,7 @@ export class App {
     this.hintPending = false;
     this.hintHoverPos = null;
     this.hintCount = 0;
+    this.solverNote = "";
     this.pressedCellPreview = null;
     this.hintBtn?.setActive(false);
     this.updateTimerDisplay();
@@ -371,6 +381,53 @@ export class App {
     if (this.game.status !== GameStatus.Playing) return;
     this.game.giveUp();
     this.stopTimer();
+    this.render();
+  }
+
+  private solveLogicalStep(): void {
+    if (this.game.status !== GameStatus.Playing) return;
+    this.solverNote = "";
+    this.startTimer();
+    const result = this.game.solveLogicalStep();
+    if (result.contradiction) {
+      console.warn("Logical solver found a contradiction:", result.reason ?? "unknown");
+      this.solverNote = "Solver contradiction";
+    } else if (result.stalled) {
+      this.solverNote = "No forced move";
+    }
+    if (this.game.status !== GameStatus.Playing) this.stopTimer();
+    this.render();
+  }
+
+  private solveLogicalUntilStuck(): void {
+    if (this.game.status !== GameStatus.Playing) return;
+    this.solverNote = "";
+    this.startTimer();
+    const result = this.game.solveAutoWithGuesses();
+    if (result.contradiction) {
+      console.warn("Logical solver found a contradiction:", result.reason ?? "unknown");
+      this.solverNote = "Solver contradiction";
+    } else if (!result.complete) {
+      console.warn("Logical solver stopped early:", result.reason ?? "search limit reached");
+      this.solverNote = "Solver search budget reached";
+    } else {
+      this.solverNote = `Auto used ${result.neededGuesses} needed guess(es)`;
+    }
+    if (this.game.status !== GameStatus.Playing) this.stopTimer();
+    this.render();
+  }
+
+  private guessEducated(): void {
+    if (this.game.status !== GameStatus.Playing) return;
+    this.solverNote = "";
+    this.startTimer();
+    const g = this.game.guessEducated();
+    if (!g.guessed) {
+      this.solverNote = "No guess available";
+    } else {
+      this.solverNote = `Guessed r${(g.row ?? 0) + 1} c${(g.col ?? 0) + 1}`;
+    }
+    if (this.game.status !== GameStatus.Playing) this.stopTimer();
     this.render();
   }
 
@@ -468,7 +525,9 @@ export class App {
     } else if (status === GameStatus.Won) {
       bar.textContent = "Congratulations, you win!";
     } else {
-      bar.textContent = `Mines remaining: ${this.game.remainingMines}`;
+      bar.textContent = this.solverNote
+        ? `Mines remaining: ${this.game.remainingMines} | ${this.solverNote}`
+        : `Mines remaining: ${this.game.remainingMines}`;
     }
     this.renderBreakdown();
   }
