@@ -1,5 +1,38 @@
 import { Cell, GameConfig, Pos } from "./types";
-import { createRng, shuffle } from "./rng";
+import { createRng } from "./rng";
+
+interface Bucket {
+  items: Pos[];
+  indexByKey: Map<string, number>;
+}
+
+function posKey(pos: Pos): string {
+  return `${pos.row},${pos.col}`;
+}
+
+function addToBucket(bucket: Bucket, pos: Pos): void {
+  const key = posKey(pos);
+  if (bucket.indexByKey.has(key)) return;
+  bucket.indexByKey.set(key, bucket.items.length);
+  bucket.items.push(pos);
+}
+
+function removeFromBucket(bucket: Bucket, pos: Pos): void {
+  const key = posKey(pos);
+  const idx = bucket.indexByKey.get(key);
+  if (idx === undefined) return;
+
+  const lastIndex = bucket.items.length - 1;
+  const last = bucket.items[lastIndex];
+  bucket.items[idx] = last;
+  bucket.indexByKey.set(posKey(last), idx);
+  bucket.items.pop();
+  bucket.indexByKey.delete(key);
+}
+
+function pickRandomFromBucket(bucket: Bucket, rng: () => number): Pos {
+  return bucket.items[Math.floor(rng() * bucket.items.length)];
+}
 
 export function neighbours(row: number, col: number, rows: number, cols: number): Pos[] {
   const result: Pos[] = [];
@@ -42,47 +75,35 @@ export function placeMines(
   const density = Math.max(0, Math.min(1, config.density ?? 0.5));
   const rng = createRng(seed);
 
-  const excludeSet = new Set(excludePositions.map((p) => `${p.row},${p.col}`));
+  const excludeSet = new Set(excludePositions.map((p) => posKey(p)));
 
   const eligible: Pos[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      if (!excludeSet.has(`${r},${c}`)) eligible.push({ row: r, col: c });
+      const p = { row: r, col: c };
+      if (!excludeSet.has(posKey(p))) eligible.push(p);
     }
   }
 
   // Track cells by state for O(1) random picks
-  const empty: Pos[] = [];    // mineCount === 0
-  const partial: Pos[] = [];  // 0 < mineCount < max
-  for (const p of eligible) empty.push(p);
-  shuffle(empty, rng);
-
-  function pickRandom(arr: Pos[]): Pos {
-    return arr[Math.floor(rng() * arr.length)];
-  }
-
-  function removeFromArray(arr: Pos[], pos: Pos): void {
-    const idx = arr.findIndex((p) => p.row === pos.row && p.col === pos.col);
-    if (idx !== -1) {
-      arr[idx] = arr[arr.length - 1];
-      arr.pop();
-    }
-  }
+  const empty: Bucket = { items: [], indexByKey: new Map() };    // mineCount === 0
+  const partial: Bucket = { items: [], indexByKey: new Map() };  // 0 < mineCount < max
+  for (const p of eligible) addToBucket(empty, p);
 
   // Place positive mines
   let placed = 0;
   while (placed < minesTotal) {
     let target: Pos | null = null;
 
-    if (rng() < density && partial.length > 0) {
+    if (rng() < density && partial.items.length > 0) {
       // Clump: stack onto a cell that already has mines
-      target = pickRandom(partial);
-    } else if (empty.length > 0) {
+      target = pickRandomFromBucket(partial, rng);
+    } else if (empty.items.length > 0) {
       // Spread: pick an empty cell
-      target = pickRandom(empty);
-    } else if (partial.length > 0) {
+      target = pickRandomFromBucket(empty, rng);
+    } else if (partial.items.length > 0) {
       // No empty cells left, stack
-      target = pickRandom(partial);
+      target = pickRandomFromBucket(partial, rng);
     } else {
       break; // all cells full
     }
@@ -93,11 +114,11 @@ export function placeMines(
 
     if (cell.mineCount === 1) {
       // Was in empty, move to partial
-      removeFromArray(empty, target);
-      partial.push(target);
+      removeFromBucket(empty, target);
+      addToBucket(partial, target);
     } else if (cell.mineCount >= maxMinesPerCell) {
       // Full, remove from partial
-      removeFromArray(partial, target);
+      removeFromBucket(partial, target);
     }
   }
 
@@ -108,15 +129,16 @@ export function placeMines(
     const negEligible: Pos[] = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        if (!excludeSet.has(`${r},${c}`) && grid[r][c].mineCount === 0) {
+        const p = { row: r, col: c };
+        if (!excludeSet.has(posKey(p)) && grid[r][c].mineCount === 0) {
           negEligible.push({ row: r, col: c });
         }
       }
     }
-    shuffle(negEligible, rng);
 
-    const negEmpty: Pos[] = [...negEligible];      // mineCount === 0
-    const negPartial: Pos[] = [];                   // -max < mineCount < 0
+    const negEmpty: Bucket = { items: [], indexByKey: new Map() };       // mineCount === 0
+    const negPartial: Bucket = { items: [], indexByKey: new Map() };     // -max < mineCount < 0
+    for (const p of negEligible) addToBucket(negEmpty, p);
 
     // Negative mine count: proportional to positive mines
     // Roughly 30% of minesTotal as negative mines, capped by available cells
@@ -129,12 +151,12 @@ export function placeMines(
     while (negPlaced < negTotal) {
       let target: Pos | null = null;
 
-      if (rng() < density && negPartial.length > 0) {
-        target = pickRandom(negPartial);
-      } else if (negEmpty.length > 0) {
-        target = pickRandom(negEmpty);
-      } else if (negPartial.length > 0) {
-        target = pickRandom(negPartial);
+      if (rng() < density && negPartial.items.length > 0) {
+        target = pickRandomFromBucket(negPartial, rng);
+      } else if (negEmpty.items.length > 0) {
+        target = pickRandomFromBucket(negEmpty, rng);
+      } else if (negPartial.items.length > 0) {
+        target = pickRandomFromBucket(negPartial, rng);
       } else {
         break;
       }
@@ -144,10 +166,10 @@ export function placeMines(
       negPlaced++;
 
       if (cell.mineCount === -1) {
-        removeFromArray(negEmpty, target);
-        negPartial.push(target);
+        removeFromBucket(negEmpty, target);
+        addToBucket(negPartial, target);
       } else if (cell.mineCount <= -maxMinesPerCell) {
-        removeFromArray(negPartial, target);
+        removeFromBucket(negPartial, target);
       }
     }
   }

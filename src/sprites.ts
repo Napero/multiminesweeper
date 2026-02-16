@@ -120,7 +120,6 @@ export const SPRITE_BOMB_GENERIC: SpriteRect = tile(6, 3);
 // Cross overlay (drawn on top of bomb sprite for wrong markers)
 export const SPRITE_CROSS: SpriteRect = tile(7, 3);
 
-export const SPRITE_QUESTION: SpriteRect = tile(0, 5);
 export const SPRITE_RED_BG: SpriteRect = tile(1, 5);
 
 export const CELL_SIZE = W;

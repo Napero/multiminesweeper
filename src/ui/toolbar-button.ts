@@ -5,14 +5,13 @@
 const SIZE = 26;
 const DISPLAY_SIZE = 52;
 
-export type ButtonKind = "giveup" | "settings" | "hint" | "help" | "github";
+export type ButtonKind = "giveup" | "settings" | "hint" | "help";
 
 const ROW: Record<ButtonKind, number> = {
   giveup: 0,
   settings: 1,
   hint: 2,
   help: 3,
-  github: 4,
 };
 
 let sharedSheet: HTMLImageElement | null = null;
@@ -91,7 +90,7 @@ export class ToolbarButton {
       this.ctx.font = "bold 9px sans-serif";
       this.ctx.textAlign = "center";
       this.ctx.textBaseline = "middle";
-      const label = this.kind === "giveup" ? "GU" : this.kind === "github" ? "GH" : this.kind.slice(0, 2).toUpperCase();
+      const label = this.kind === "giveup" ? "GU" : this.kind.slice(0, 2).toUpperCase();
       this.ctx.fillText(label, SIZE / 2, SIZE / 2);
     }
   }

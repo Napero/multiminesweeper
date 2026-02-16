@@ -66,21 +66,25 @@ export class Renderer {
   }
 
   pixelToCell(px: number, py: number): { row: number; col: number } | null {
+    if (px < 0 || py < 0) return null;
+    if (px >= this.canvas.width || py >= this.canvas.height) return null;
     const col = Math.floor(px / (CELL_SIZE * this.scale));
     const row = Math.floor(py / (CELL_HEIGHT * this.scale));
+    if (col < 0 || row < 0) return null;
     return { row, col };
   }
 
-  renderBoard(game: Game): void {
+  renderBoard(game: Game, pressedCell: { row: number; col: number } | null = null): void {
     const { rows, cols } = game;
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        this.renderCell(game.cellView(r, c), game.status);
+        const isPressed = pressedCell !== null && pressedCell.row === r && pressedCell.col === c;
+        this.renderCell(game.cellView(r, c), game.status, isPressed);
       }
     }
   }
 
-  renderCell(view: CellView, status: GameStatus): void {
+  renderCell(view: CellView, status: GameStatus, isPressed = false): void {
     const dx = view.col * CELL_SIZE * this.scale;
     const dy = view.row * CELL_HEIGHT * this.scale;
     const dw = CELL_SIZE * this.scale;
@@ -89,6 +93,15 @@ export class Renderer {
 
     const lost = status === GameStatus.Lost;
     const mc = view.mineCount ?? 0;
+
+    if (isPressed && status === GameStatus.Playing && !view.opened && view.markerCount === 0) {
+      if (fb) {
+        drawCellOpen(this.ctx, dx, dy, dw, dh);
+      } else {
+        this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh);
+      }
+      return;
+    }
 
     if (view.opened) {
       if (view.exploded) {
