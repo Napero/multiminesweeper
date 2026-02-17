@@ -332,29 +332,34 @@ export class Renderer {
     cx /= points.length;
     cy /= points.length;
 
-    // 1) Fill outer polygon with diagonal white/dark-gray split
-    //    Top-left half = white (highlight), bottom-right half = dark gray (shadow)
+    // 1) Fill outer polygon by angular slices (edge midpoint direction from center).
+    //    Highlight slices that face from straight-up to straight-left.
     ctx.save();
     this.tracePolygon(points);
     ctx.clip();
 
-    const minX = Math.min(...points.map((p) => p.x));
-    const maxX = Math.max(...points.map((p) => p.x));
-    const minY = Math.min(...points.map((p) => p.y));
-    const maxY = Math.max(...points.map((p) => p.y));
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      const mx = (a.x + b.x) * 0.5;
+      const my = (a.y + b.y) * 0.5;
+      const vx = mx - cx;
+      const vy = my - cy;
+      // Stable angular sector: highlight faces whose outward direction is
+      // between left (180 deg) and up (270 deg), inclusive.
+      let deg = (Math.atan2(vy, vx) * 180) / Math.PI;
+      if (deg < 0) deg += 360;
+      const eps = 0.001;
+      const lit = deg >= (180 - eps) && deg <= (270 + eps);
 
-    // White half (top-left triangle of bounding box, along the diagonal)
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
-
-    // Dark gray half (bottom-right), clipped by a diagonal line through center
-    ctx.beginPath();
-    ctx.moveTo(maxX + 1, minY - 1);
-    ctx.lineTo(maxX + 1, maxY + 1);
-    ctx.lineTo(minX - 1, maxY + 1);
-    ctx.closePath();
-    ctx.fillStyle = "#808080";
-    ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.closePath();
+      ctx.fillStyle = lit ? "#ffffff" : "#9a9a9a";
+      ctx.fill();
+    }
 
     ctx.restore();
 

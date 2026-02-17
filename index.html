@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -81,10 +81,23 @@
       cursor: pointer;
     }
     #settings-dropdown .preset:hover { background: #000080; color: #fff; }
-    #settings-dropdown hr {
-      border: none;
-      border-top: 1px solid #808080;
-      margin: 2px 4px;
+    #settings-dropdown .menu-divider {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 4px 8px 2px 8px;
+      color: #666;
+      font-size: 10px;
+      line-height: 1;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      user-select: none;
+      pointer-events: none;
+    }
+    #settings-dropdown .menu-divider::after {
+      content: "";
+      flex: 1;
+      border-top: 1px solid #9a9a9a;
     }
 
     /* Custom config modal */
@@ -130,6 +143,12 @@
       padding: 0;
     }
     #custom-panel .btn-row {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 10px;
+    }
+    #custom-panel .share-row {
       display: flex;
       gap: 8px;
       justify-content: flex-end;
@@ -204,24 +223,25 @@
     <div id="settings-anchor">
       <canvas id="btn-settings" width="26" height="26" title="Settings"></canvas>
       <div id="settings-dropdown">
+        <div class="menu-divider"><span>Regular</span></div>
         <button class="preset" data-preset="beginner">Beginner</button>
         <button class="preset" data-preset="intermediate">Intermediate</button>
         <button class="preset" data-preset="hard">Hard (default)</button>
         <button class="preset" data-preset="expert">Expert</button>
         <button class="preset" data-preset="nightmare">Nightmare</button>
-        <hr>
+        <div class="menu-divider"><span>Negative Mines</span></div>
         <button class="preset" data-preset="intermediate-negative">Intermediate (negative)</button>
         <button class="preset" data-preset="hard-negative">Hard (negative)</button>
-        <hr>
+        <div class="menu-divider"><span>Topologies</span></div>
         <button class="preset" data-preset="cylinder">Cylinder topology</button>
         <button class="preset" data-preset="torus">Torus topology</button>
-        <button class="preset" data-preset="mobius">Möbius strip topology</button>
+        <button class="preset" data-preset="mobius">Mobius strip topology</button>
         <button class="preset" data-preset="klein">Klein bottle topology</button>
-        <hr>
-        <button class="preset" data-preset="hex">Hex grid</button>
+        <div class="menu-divider"><span>Cell Shapes</span></div>
+        <button class="preset" data-preset="hex">Hexagonal grid</button>
         <button class="preset" data-preset="triangle">Triangle grid</button>
-        <hr>
-        <button class="preset" data-preset="custom">Custom…</button>
+        <div class="menu-divider"><span>Other</span></div>
+        <button class="preset" data-preset="custom">Custom...</button>
       </div>
     </div>
     <canvas id="btn-help" width="26" height="26" title="Help"></canvas>
@@ -256,11 +276,15 @@
           <option value="plane">Plane (classic)</option>
           <option value="cylinder">Cylinder</option>
           <option value="torus">Torus</option>
-          <option value="mobius">Möbius strip</option>
+          <option value="mobius">Mobius strip</option>
           <option value="klein">Klein bottle</option>
           <option value="projective">Projective plane</option>
         </select>
       </label>
+      <div class="share-row">
+        <button id="copy-link-no-seed" title="Copy URL for this configuration without seed">Copy URL (No Seed)</button>
+        <button id="copy-link-with-seed" title="Copy URL for this configuration including seed">Copy URL (With Seed)</button>
+      </div>
       <div class="btn-row">
         <button id="custom-cancel">Cancel</button>
         <button id="custom-ok">Start</button>
@@ -272,25 +296,25 @@
   <div id="help-overlay">
     <div id="help-panel">
       <h3>How to play</h3>
-      <p style="max-width:360px; margin-bottom:8px;">Multi-Minesweeper: each cell can contain 0–6 mines. Reveal safe cells, mark suspected mines, and chord numbers when markers match the hint to open neighbours.</p>
+      <p style="max-width:360px; margin-bottom:8px;">Multi-Minesweeper: each cell can contain 0-6 mines. Reveal safe cells, mark suspected mines, and chord numbers when markers match the hint to open neighbours.</p>
       <h4 style="margin:6px 0 4px 0;">Controls</h4>
       <ul style="list-style:none; padding-left:0; margin:0 0 8px 0;">
         <li><strong>Left-click / Tap:</strong> Open a cell</li>
-        <li><strong>Right-click:</strong> Cycle marker state (0→1→…→6→0)</li>
+        <li><strong>Right-click:</strong> Cycle marker state (0->1->...->6->0)</li>
         <li><strong>Shift + Right-click:</strong> Cycle marker backwards</li>
         <li><strong>Middle-click / Tap number:</strong> Chord (open neighbours when marker sum matches number)</li>
         <li><strong>Space:</strong> When hovering: cycles marker on covered cell, chords on opened number</li>
-        <li><strong>Mobile (long-press):</strong> Long-press a covered cell to enter marking; drag up/down to set 1–6; release to confirm</li>
+        <li><strong>Mobile (long-press):</strong> Long-press a covered cell to enter marking; drag up/down to set 1-6; release to confirm</li>
       </ul>
       <h4 style="margin:6px 0 4px 0;">Modes</h4>
       <ul style="list-style:none; padding-left:0; margin:0 0 8px 0;">
         <li><strong>Grid shapes:</strong> Square, Hex, Triangle</li>
-        <li><strong>Topologies:</strong> Plane, Cylinder, Torus, Möbius strip, Klein bottle, Projective plane</li>
+        <li><strong>Topologies:</strong> Plane, Cylinder, Torus, Mobius strip, Klein bottle, Projective plane</li>
       </ul>
       <h4 style="margin:6px 0 4px 0;">Toolbar</h4>
       <ul style="list-style:none; padding-left:0; margin:0 0 8px 0;">
         <li><strong>Settings:</strong> Presets + custom options (including topology)</li>
-        <li><strong>Hint:</strong> Toggle hint targeting for a 3×3 reveal assist</li>
+        <li><strong>Hint:</strong> Toggle hint targeting for a 3x3 reveal assist</li>
         <li><strong>Give Up:</strong> Reveal the board immediately</li>
       </ul>
       <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; margin-top:8px;">
@@ -305,10 +329,11 @@
   <div id="game-container">
     <canvas id="game-canvas"></canvas>
   </div>
-  <div id="status-bar">Left-click: open · Right-click: cycle marker · Middle-click: chord</div>
+  <div id="status-bar">Left-click: open | Right-click: cycle marker | Middle-click: chord</div>
   <div id="mine-breakdown">
     <canvas id="breakdown-canvas" height="28"></canvas>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
+
