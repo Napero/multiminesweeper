@@ -103,7 +103,11 @@ export class App {
   }
 
   async init(): Promise<void> {
-    this.keepBaseUrlConstant();
+    // Read initial config from URL hash (if any)
+    const hashConfig = this.readConfigFromHash();
+    if (hashConfig) {
+      this.config = hashConfig;
+    }
     try {
       this.sheet = await loadSpritesheet();
     } catch {
@@ -304,12 +308,77 @@ export class App {
     document.getElementById("help-overlay")?.classList.remove("open");
   }
 
-  private keepBaseUrlConstant(): void {
-    const base = import.meta.env.BASE_URL ?? "/";
-    const normalizedBase = base.endsWith("/") ? base : `${base}/`;
-    if (window.location.pathname !== normalizedBase || window.location.search !== "" || window.location.hash !== "") {
-      window.history.replaceState(null, "", normalizedBase);
+  private readConfigFromHash(): Partial<GameConfig> | null {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return null;
+    const params = new URLSearchParams(hash);
+
+    // Named preset: #preset=hex
+    const presetName = params.get("preset");
+    if (presetName && PRESETS[presetName]) {
+      const cfg: Partial<GameConfig> = { ...PRESETS[presetName] };
+      const seed = params.get("seed");
+      if (seed) {
+        cfg.seed = parseSeedInput(seed);
+        this.seedLocked = true;
+      }
+      return cfg;
     }
+
+    // Custom params: #rows=14&cols=20&mines=130&...
+    if (!params.has("rows") && !params.has("cols")) return null;
+    const cfg: Partial<GameConfig> = {};
+    if (params.has("rows")) cfg.rows = parseInt(params.get("rows")!, 10);
+    if (params.has("cols")) cfg.cols = parseInt(params.get("cols")!, 10);
+    if (params.has("mines")) cfg.minesTotal = parseInt(params.get("mines")!, 10);
+    if (params.has("max")) cfg.maxMinesPerCell = parseInt(params.get("max")!, 10);
+    if (params.has("density")) cfg.density = parseFloat(params.get("density")!);
+    if (params.has("shape")) cfg.gridShape = params.get("shape") as GridShape;
+    if (params.has("topology")) cfg.topology = params.get("topology") as TopologyMode;
+    if (params.has("negative")) cfg.negativeMines = params.get("negative") === "1";
+    if (params.has("seed")) {
+      cfg.seed = parseSeedInput(params.get("seed")!);
+      this.seedLocked = true;
+    }
+    return cfg;
+  }
+
+  private writeConfigToHash(): void {
+    const cfg = this.config as GameConfig;
+    const def = DEFAULT_CONFIG;
+    const params = new URLSearchParams();
+
+    // Check if this matches a named preset
+    for (const [name, preset] of Object.entries(PRESETS)) {
+      const merged = { ...def, ...preset };
+      if (
+        cfg.rows === merged.rows &&
+        cfg.cols === merged.cols &&
+        cfg.minesTotal === merged.minesTotal &&
+        cfg.maxMinesPerCell === merged.maxMinesPerCell &&
+        cfg.density === merged.density &&
+        cfg.gridShape === merged.gridShape &&
+        cfg.topology === merged.topology &&
+        cfg.negativeMines === merged.negativeMines
+      ) {
+        params.set("preset", name);
+        if (this.seedLocked) params.set("seed", String(cfg.seed));
+        window.history.replaceState(null, "", `#${params.toString()}`);
+        return;
+      }
+    }
+
+    // Custom params
+    params.set("rows", String(cfg.rows));
+    params.set("cols", String(cfg.cols));
+    params.set("mines", String(cfg.minesTotal));
+    if (cfg.maxMinesPerCell !== def.maxMinesPerCell) params.set("max", String(cfg.maxMinesPerCell));
+    if (cfg.density !== def.density) params.set("density", String(cfg.density));
+    if (cfg.gridShape !== "square") params.set("shape", cfg.gridShape);
+    if (cfg.topology !== "plane") params.set("topology", cfg.topology);
+    if (cfg.negativeMines) params.set("negative", "1");
+    if (this.seedLocked) params.set("seed", String(cfg.seed));
+    window.history.replaceState(null, "", `#${params.toString()}`);
   }
 
   private setInputValue(id: string, value: string): void {
@@ -444,7 +513,7 @@ export class App {
     this.hintBtn?.setActive(false);
     this.updateTimerDisplay();
     this.render();
-    this.keepBaseUrlConstant();
+    this.writeConfigToHash();
   }
 
   giveUp(): void {
