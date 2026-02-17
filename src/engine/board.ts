@@ -182,10 +182,13 @@ function pentagonNeighbourDeltas(row: number, col: number): Array<{ dr: number; 
   const baseCol = flowerCol * PENTAGON_PETALS;
   const deltas: Array<{ dr: number; dc: number }> = [];
 
-  const leftPetal = (petal + PENTAGON_PETALS - 1) % PENTAGON_PETALS;
-  const rightPetal = (petal + 1) % PENTAGON_PETALS;
-  deltas.push({ dr: 0, dc: baseCol + leftPetal - col });
-  deltas.push({ dr: 0, dc: baseCol + rightPetal - col });
+  // In this pentagonal tiling, the 6 petals in a flower share the hub vertex.
+  // Minesweeper adjacency counts vertex-touching cells, so all other petals
+  // in the same flower are neighbors (not just edge-adjacent ones).
+  for (let p = 0; p < PENTAGON_PETALS; p++) {
+    if (p === petal) continue;
+    deltas.push({ dr: 0, dc: baseCol + p - col });
+  }
 
   for (const link of PENTAGON_EXTERNAL_BY_PETAL[petal]) {
     const next = pentagonMoveFlower(row, flowerCol, link.dir);

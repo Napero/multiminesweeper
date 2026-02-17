@@ -209,24 +209,6 @@
       image-rendering: pixelated;
       cursor: default;
     }
-    #pentagon-tuning {
-      margin-top: 8px;
-      display: none;
-      gap: 14px;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
-      color: #333;
-    }
-    #pentagon-tuning label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    #pentagon-tuning input[type="range"] {
-      width: 140px;
-    }
   </style>
 </head>
 <body>
@@ -347,18 +329,6 @@
   <div id="status-bar">Left-click: open | Right-click: cycle marker | Middle-click: chord</div>
   <div id="mine-breakdown">
     <canvas id="breakdown-canvas" height="28"></canvas>
-  </div>
-  <div id="pentagon-tuning">
-    <label>
-      Pentagon spacing
-      <input id="opt-penta-spacing" type="range" min="85" max="135" value="104">
-      <span id="penta-spacing-val">1.04</span>
-    </label>
-    <label>
-      Pentagon angle
-      <input id="opt-penta-angle" type="range" min="-30" max="30" value="10">
-      <span id="penta-angle-val">10°</span>
-    </label>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

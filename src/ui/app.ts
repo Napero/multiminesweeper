@@ -1,5 +1,5 @@
 import { DEFAULT_CONFIG, Game, GameConfig, GameStatus, GridShape, TopologyMode } from "../engine/index";
-import { Renderer, getPentagonLayout, measureBoardPixels, setPentagonLayout } from "./renderer";
+import { Renderer, measureBoardPixels } from "./renderer";
 import { InputHandler } from "./input";
 import { loadSpritesheet } from "../sprites";
 import { SPRITE_BOMB, SpriteRect } from "../sprites";
@@ -102,8 +102,6 @@ export class App {
   private breakdownInvertCanvas = document.createElement("canvas");
   private breakdownInvertCtx = this.breakdownInvertCanvas.getContext("2d")!;
   private seedLocked = false;
-  private pentagonSpacingScale = getPentagonLayout().spacingScale;
-  private pentagonAngleDeg = getPentagonLayout().rotationDeg;
 
   private normalizeConfigForEngine(cfg: GameConfig): GameConfig {
     if (cfg.gridShape !== "pentagon") return cfg;
@@ -211,27 +209,6 @@ export class App {
     const shapeSelect = document.getElementById("opt-shape") as HTMLSelectElement | null;
     shapeSelect?.addEventListener("change", () => this.updatePentagonShapeNoteVisibility());
 
-    const pentSpacing = document.getElementById("opt-penta-spacing") as HTMLInputElement | null;
-    const pentAngle = document.getElementById("opt-penta-angle") as HTMLInputElement | null;
-    const pentSpacingVal = document.getElementById("penta-spacing-val");
-    const pentAngleVal = document.getElementById("penta-angle-val");
-    if (pentSpacing) pentSpacing.value = String(Math.round(this.pentagonSpacingScale * 100));
-    if (pentAngle) pentAngle.value = String(Math.round(this.pentagonAngleDeg));
-    if (pentSpacingVal) pentSpacingVal.textContent = this.pentagonSpacingScale.toFixed(2);
-    if (pentAngleVal) pentAngleVal.textContent = `${Math.round(this.pentagonAngleDeg)}°`;
-    pentSpacing?.addEventListener("input", () => {
-      this.pentagonSpacingScale = Math.max(0.85, Math.min(1.35, parseInt(pentSpacing.value, 10) / 100));
-      if (pentSpacingVal) pentSpacingVal.textContent = this.pentagonSpacingScale.toFixed(2);
-      setPentagonLayout({ spacingScale: this.pentagonSpacingScale });
-      if (this.game?.gridShape === "pentagon") this.onResize();
-    });
-    pentAngle?.addEventListener("input", () => {
-      this.pentagonAngleDeg = Math.max(-30, Math.min(30, parseInt(pentAngle.value, 10)));
-      if (pentAngleVal) pentAngleVal.textContent = `${Math.round(this.pentagonAngleDeg)}°`;
-      setPentagonLayout({ rotationDeg: this.pentagonAngleDeg });
-      if (this.game?.gridShape === "pentagon") this.render();
-    });
-
     window.addEventListener("resize", () => this.onResize());
 
     // Hint preview overlay on hover
@@ -305,7 +282,6 @@ export class App {
     }, { passive: true });
 
     this.newGame(this.config);
-    this.updatePentagonTuningVisibility();
     // Global keyboard: ? opens help, Esc closes
     window.addEventListener("keydown", this.onGlobalKey);
   }
@@ -478,10 +454,6 @@ export class App {
     }
     if (this.input) this.input.detach();
 
-    setPentagonLayout({
-      spacingScale: this.pentagonSpacingScale,
-      rotationDeg: this.pentagonAngleDeg,
-    });
     const logicalConfig: GameConfig = { ...DEFAULT_CONFIG, ...this.config };
     const engineConfig = this.normalizeConfigForEngine(logicalConfig);
     this.game = new Game(engineConfig);
@@ -566,7 +538,6 @@ export class App {
     this.hintBtn?.setActive(false);
     this.updateTimerDisplay();
     this.render();
-    this.updatePentagonTuningVisibility();
     this.writeConfigToHash();
   }
 
@@ -648,12 +619,6 @@ export class App {
     }
     this.updateSmiley();
     this.updateStatusBar();
-  }
-
-  private updatePentagonTuningVisibility(): void {
-    const panel = document.getElementById("pentagon-tuning");
-    if (!panel || !this.game) return;
-    panel.style.display = this.game.gridShape === "pentagon" ? "flex" : "none";
   }
 
   private updatePentagonShapeNoteVisibility(): void {

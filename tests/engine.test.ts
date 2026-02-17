@@ -140,14 +140,14 @@ describe("neighbours", () => {
     }
   });
 
-  it("pentagon grid has 5 neighbors for an interior cell", () => {
+  it("pentagon grid has 8 neighbors for an interior cell (edge + vertex touching)", () => {
     const n = neighboursForGrid(4, 12, 10, 24, "plane", "pentagon");
-    expect(n).toHaveLength(5);
+    expect(n).toHaveLength(8);
   });
 
-  it("pentagon corner has fewer than 5 neighbors", () => {
+  it("pentagon corner has fewer than 8 neighbors", () => {
     const n = neighboursForGrid(0, 0, 10, 24, "plane", "pentagon");
-    expect(n.length).toBeLessThan(5);
+    expect(n.length).toBeLessThan(8);
   });
 
   it("pentagon neighbors are unique and never include itself", () => {
