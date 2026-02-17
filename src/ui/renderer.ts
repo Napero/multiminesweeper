@@ -2,6 +2,7 @@ import { CellView, GameStatus, GridShape, TopologyMode } from "../engine/types";
 import { Game } from "../engine/game";
 import { neighboursForGrid } from "../engine/board";
 import { buildIrregularLayout, IrregularPoint } from "../engine/irregular";
+import { buildRandomLayout, RandomPoint } from "../engine/random";
 import {
   SpriteRect,
   SPRITE_CELL_CLOSED,
@@ -75,12 +76,12 @@ function pentagonRowOffset(): number {
   return PENTAGON_BASE_FLOWER_ROW_OFFSET * pentagonLayout.spacingScale;
 }
 
-interface IrregularMesh {
+interface PolygonMesh {
   rows: number;
   cols: number;
   scale: number;
   seed: number;
-  quads: Array<Array<{ x: number; y: number }>>;
+  polygons: Array<Array<{ x: number; y: number }>>;
   offsetX: number;
   offsetY: number;
   width: number;
@@ -166,11 +167,22 @@ function measurePentagonBoard(rows: number, cols: number, cellW: number): { widt
   };
 }
 
-function buildIrregularMesh(rows: number, cols: number, scale: number, seed: number): IrregularMesh {
-  const layout = buildIrregularLayout(rows, cols, seed);
+function buildPolygonMesh(
+  layout: {
+    polygons: IrregularPoint[][] | RandomPoint[][];
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  },
+  rows: number,
+  cols: number,
+  scale: number,
+  seed: number,
+): PolygonMesh {
   const cellW = CELL_SIZE * scale;
   const cellH = CELL_HEIGHT * scale;
-  const quads = layout.polygons.map((poly: IrregularPoint[]) =>
+  const polygons = layout.polygons.map((poly) =>
     poly.map((p) => ({ x: p.x * cellW, y: p.y * cellH })),
   );
   const minX = layout.minX * cellW;
@@ -185,12 +197,20 @@ function buildIrregularMesh(rows: number, cols: number, scale: number, seed: num
     cols,
     scale,
     seed,
-    quads,
+    polygons,
     offsetX,
     offsetY,
     width: Math.ceil(maxX - minX + pad * 2),
     height: Math.ceil(maxY - minY + pad * 2),
   };
+}
+
+function buildIrregularMesh(rows: number, cols: number, scale: number, seed: number): PolygonMesh {
+  return buildPolygonMesh(buildIrregularLayout(rows, cols, seed), rows, cols, scale, seed);
+}
+
+function buildRandomMesh(rows: number, cols: number, scale: number, seed: number): PolygonMesh {
+  return buildPolygonMesh(buildRandomLayout(rows, cols, seed), rows, cols, scale, seed);
 }
 
 export function measureBoardPixels(rows: number, cols: number, shape: GridShape, scale = 1, seed = 0): { width: number; height: number } {
@@ -219,6 +239,10 @@ export function measureBoardPixels(rows: number, cols: number, shape: GridShape,
     const mesh = buildIrregularMesh(rows, cols, scale, seed);
     return { width: mesh.width, height: mesh.height };
   }
+  if (shape === "random") {
+    const mesh = buildRandomMesh(rows, cols, scale, seed);
+    return { width: mesh.width, height: mesh.height };
+  }
   return { width: Math.ceil(cols * cellW), height: Math.ceil(rows * cellH) };
 }
 
@@ -235,7 +259,7 @@ export class Renderer {
   private gridCols = 0;
   private pentagonOffsetX = 0;
   private pentagonOffsetY = 0;
-  private irregularMesh: IrregularMesh | null = null;
+  private polygonMesh: PolygonMesh | null = null;
 
   private get useFallback(): boolean {
     return !this.sheet;
@@ -270,17 +294,20 @@ export class Renderer {
       this.pentagonOffsetY = pad - bounds.minY;
       w = Math.ceil(Math.max(0, bounds.maxX - bounds.minX) + pad * 2);
       h = Math.ceil(Math.max(0, bounds.maxY - bounds.minY) + pad * 2);
-      this.irregularMesh = null;
-    } else if (shape === "irregular") {
+      this.polygonMesh = null;
+    } else if (shape === "irregular" || shape === "random") {
       this.pentagonOffsetX = 0;
       this.pentagonOffsetY = 0;
-      this.irregularMesh = buildIrregularMesh(rows, cols, this.scale, seed);
-      w = this.irregularMesh.width;
-      h = this.irregularMesh.height;
+      this.polygonMesh =
+        shape === "random"
+          ? buildRandomMesh(rows, cols, this.scale, seed)
+          : buildIrregularMesh(rows, cols, this.scale, seed);
+      w = this.polygonMesh.width;
+      h = this.polygonMesh.height;
     } else {
       this.pentagonOffsetX = 0;
       this.pentagonOffsetY = 0;
-      this.irregularMesh = null;
+      this.polygonMesh = null;
       const size = measureBoardPixels(rows, cols, shape, this.scale);
       w = size.width;
       h = size.height;
@@ -347,8 +374,8 @@ export class Renderer {
       return null;
     }
 
-    if (this.currentShape === "irregular") {
-      if (!this.irregularMesh) return null;
+    if (this.currentShape === "irregular" || this.currentShape === "random") {
+      if (!this.polygonMesh) return null;
       for (let rr = 0; rr < this.gridRows; rr++) {
         for (let cc = 0; cc < this.gridCols; cc++) {
           if (this.pointInCellPolygon(rr, cc, px, py)) return { row: rr, col: cc };
@@ -482,7 +509,11 @@ export class Renderer {
 
     // Compute inset square for content sprites, centered on polygon centroid
     const insetFactor =
-      this.currentShape === "hex" ? 0.65 : this.currentShape === "irregular" ? 0.6 : 0.55;
+      this.currentShape === "hex"
+        ? 0.65
+        : this.currentShape === "irregular" || this.currentShape === "random"
+          ? 0.6
+          : 0.55;
     let cx = 0, cy = 0;
     for (const p of g.points) { cx += p.x; cy += p.y; }
     cx /= g.points.length;
@@ -572,43 +603,67 @@ export class Renderer {
     cx /= points.length;
     cy /= points.length;
 
-    // 1) Fill outer polygon by angular slices (edge midpoint direction from center).
-    //    Highlight slices that face from straight-up to straight-left.
-    ctx.save();
-    this.tracePolygon(points);
-    ctx.clip();
-
-    for (let i = 0; i < points.length; i++) {
-      const a = points[i];
-      const b = points[(i + 1) % points.length];
-      const mx = (a.x + b.x) * 0.5;
-      const my = (a.y + b.y) * 0.5;
-      const vx = mx - cx;
-      const vy = my - cy;
-      // Stable angular sector: highlight faces whose outward direction is
-      // between left (180 deg) and up (270 deg), inclusive.
-      let deg = (Math.atan2(vy, vx) * 180) / Math.PI;
-      if (deg < 0) deg += 360;
-      const eps = 0.001;
-      const lit = deg >= (180 - eps) && deg <= (270 + eps);
-
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.closePath();
-      ctx.fillStyle = lit ? "#ffffff" : "#9a9a9a";
-      ctx.fill();
-    }
-
-    ctx.restore();
-
-    // 2) Draw inner (smaller) polygon filled with medium gray (the cell face)
+    // Draw inner (smaller) polygon filled with medium gray (the cell face)
     const inset = shape === "triangle" ? 0.62 : 0.78;
     const inner = points.map((p) => ({
       x: cx + (p.x - cx) * inset,
       y: cy + (p.y - cy) * inset,
     }));
+
+    // 1) Fill outer bevel ring edge-by-edge. Light comes from top-left.
+    // This keeps reflections stable on irregular polygons.
+    const eps = 0.001;
+    const edgeAngles: number[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      const mx = (a.x + b.x) * 0.5;
+      const my = (a.y + b.y) * 0.5;
+      let deg = (Math.atan2(my - cy, mx - cx) * 180) / Math.PI;
+      if (deg < 0) deg += 360;
+      edgeAngles.push(deg);
+    }
+
+    let topEdge = -1;
+    let leftEdge = -1;
+    if (shape === "random") {
+      let bestTop = Number.POSITIVE_INFINITY;
+      let bestLeft = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < edgeAngles.length; i++) {
+        const d = edgeAngles[i];
+        const topDist = Math.abs(d - 270);
+        if (topDist < bestTop) {
+          bestTop = topDist;
+          topEdge = i;
+        }
+        const leftDist = Math.abs(d - 180);
+        if (leftDist < bestLeft) {
+          bestLeft = leftDist;
+          leftEdge = i;
+        }
+      }
+    }
+
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      const ia = inner[i];
+      const ib = inner[(i + 1) % points.length];
+      const deg = edgeAngles[i];
+      const litBySector = deg >= (180 - eps) && deg <= (270 + eps);
+      const lit = litBySector || (shape === "random" && (i === topEdge || i === leftEdge));
+      const color = lit ? "#ffffff" : "#9a9a9a";
+
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(ib.x, ib.y);
+      ctx.lineTo(ia.x, ia.y);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
     this.tracePolygon(inner);
     ctx.fillStyle = "#c0c0c0";
     ctx.fill();
@@ -676,10 +731,10 @@ export class Renderer {
       };
     }
 
-    if (this.currentShape === "irregular" && this.irregularMesh) {
+    if ((this.currentShape === "irregular" || this.currentShape === "random") && this.polygonMesh) {
       const idx = row * this.gridCols + col;
-      const quad = this.irregularMesh.quads[idx];
-      if (!quad) {
+      const polygon = this.polygonMesh.polygons[idx];
+      if (!polygon) {
         const dx = col * dw;
         const dy = row * dh;
         const points = [
@@ -690,9 +745,9 @@ export class Renderer {
         ];
         return { dx, dy, dw, dh, points };
       }
-      const points = quad.map((p) => ({
-        x: p.x + this.irregularMesh!.offsetX,
-        y: p.y + this.irregularMesh!.offsetY,
+      const points = polygon.map((p) => ({
+        x: p.x + this.polygonMesh!.offsetX,
+        y: p.y + this.polygonMesh!.offsetY,
       }));
       const bounds = boundsOfPoints(points);
       return {

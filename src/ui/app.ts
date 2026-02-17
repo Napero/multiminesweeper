@@ -27,6 +27,8 @@ const PRESETS: Record<string, Partial<GameConfig>> = {
   pentagon: { rows: 6, cols: 9, minesTotal: 155, maxMinesPerCell: 6, density: 0.6, gridShape: "pentagon" },
   "irregular-rectangle": { rows: 16, cols: 24, minesTotal: 180, maxMinesPerCell: 6, density: 0.6, gridShape: "irregular" },
   irregular: { rows: 16, cols: 24, minesTotal: 180, maxMinesPerCell: 6, density: 0.6, gridShape: "irregular" }, // legacy alias
+  "random-grid": { rows: 14, cols: 22, minesTotal: 120, maxMinesPerCell: 6, density: 0.6, gridShape: "random" },
+  random: { rows: 14, cols: 22, minesTotal: 120, maxMinesPerCell: 6, density: 0.6, gridShape: "random" }, // alias
 };
 
 function parseSeedInput(seedStr: string): number {

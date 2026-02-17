@@ -1,6 +1,7 @@
 import { Cell, GameConfig, GridShape, Pos, TopologyMode } from "./types";
 import { createRng } from "./rng";
 import { buildIrregularLayout } from "./irregular";
+import { buildRandomLayout } from "./random";
 
 interface Bucket {
   items: Pos[];
@@ -238,7 +239,7 @@ function shapeNeighbourDeltas(row: number, col: number, shape: GridShape): Array
     return pentagonNeighbourDeltas(row, col);
   }
 
-  if (shape === "irregular") {
+  if (shape === "irregular" || shape === "random") {
     const deltas: Array<{ dr: number; dc: number }> = [];
     for (let dr = -1; dr <= 1; dr++) {
       for (let dc = -1; dc <= 1; dc++) {
@@ -272,9 +273,12 @@ export function neighboursForGrid(
   shape: GridShape,
   seed = 0,
 ): Pos[] {
-  if (shape === "irregular") {
+  if (shape === "irregular" || shape === "random") {
     if (row < 0 || row >= rows || col < 0 || col >= cols) return [];
-    const layout = buildIrregularLayout(rows, cols, seed);
+    const layout =
+      shape === "random"
+        ? buildRandomLayout(rows, cols, seed)
+        : buildIrregularLayout(rows, cols, seed);
     const idx = row * cols + col;
     const ns = layout.neighbours[idx] ?? [];
     return ns.map((n) => ({ row: Math.floor(n / cols), col: n % cols }));

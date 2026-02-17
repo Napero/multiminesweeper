@@ -174,6 +174,25 @@ describe("neighbours", () => {
     expect(n.some((p) => p.row === 0 && p.col === 0)).toBe(false);
   });
 
+  it("random grid neighbors are deterministic for the same seed", () => {
+    const a = neighboursForGrid(5, 7, 12, 12, "plane", "random", 777);
+    const b = neighboursForGrid(5, 7, 12, 12, "plane", "random", 777);
+    expect(a).toEqual(b);
+  });
+
+  it("random grid neighbors are unique and never include itself", () => {
+    const n = neighboursForGrid(4, 4, 12, 12, "plane", "random", 1234);
+    const keys = n.map((p) => `${p.row},${p.col}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(n.some((p) => p.row === 4 && p.col === 4)).toBe(false);
+  });
+
+  it("random grid has variable polygon-like valence", () => {
+    const n = neighboursForGrid(6, 6, 12, 12, "plane", "random", 555);
+    expect(n.length).toBeGreaterThanOrEqual(3);
+    expect(n.length).toBeLessThanOrEqual(12);
+  });
+
   it("hex + torus wraps correctly", () => {
     const n = neighboursForGrid(0, 0, 6, 6, "torus", "hex");
     // Should have 6 neighbors, some wrapping around
