@@ -209,6 +209,24 @@
       image-rendering: pixelated;
       cursor: default;
     }
+    #pentagon-tuning {
+      margin-top: 8px;
+      display: none;
+      gap: 14px;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      color: #333;
+    }
+    #pentagon-tuning label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #pentagon-tuning input[type="range"] {
+      width: 140px;
+    }
   </style>
 </head>
 <body>
@@ -234,6 +252,8 @@
         <div class="menu-divider"><span>Cell Shapes</span></div>
         <button class="preset" data-preset="hex">Hexagonal grid</button>
         <button class="preset" data-preset="triangle">Triangle grid</button>
+        <button class="preset" data-preset="pentagon">Pentagonal floret grid</button>
+        <button class="preset" data-preset="irregular-rectangle">Irregular rectangle grid</button>
         <div class="menu-divider"><span>Other</span></div>
         <button class="preset" data-preset="custom">Custom...</button>
       </div>
@@ -263,8 +283,13 @@
           <option value="square">Square</option>
           <option value="hex">Hex</option>
           <option value="triangle">Triangle</option>
+          <option value="pentagon">Pentagon (floret)</option>
+          <option value="irregular">Irregular rectangle grid</option>
         </select>
       </label>
+      <div id="opt-pentagon-note" style="font-size:10px; color:#555; margin:2px 0 6px 0; display:none;">
+        In pentagon mode, rows/cols are flower-grid dimensions.
+      </div>
       <label>Topology
         <select id="opt-topology" style="width:120px; font-size:11px; font-family:'Pixelated MS Sans Serif', Arial, sans-serif;">
           <option value="plane">Plane (classic)</option>
@@ -298,7 +323,7 @@
       </ul>
       <h4 style="margin:6px 0 4px 0;">Modes</h4>
       <ul style="list-style:none; padding-left:0; margin:0 0 8px 0;">
-        <li><strong>Grid shapes:</strong> Square, Hex, Triangle</li>
+        <li><strong>Grid shapes:</strong> Square, Hex, Triangle, Pentagon (floret), Irregular rectangle grid</li>
         <li><strong>Topologies:</strong> Plane, Cylinder, Torus, Mobius strip, Klein bottle, Projective plane</li>
       </ul>
       <h4 style="margin:6px 0 4px 0;">Toolbar</h4>
@@ -322,6 +347,18 @@
   <div id="status-bar">Left-click: open | Right-click: cycle marker | Middle-click: chord</div>
   <div id="mine-breakdown">
     <canvas id="breakdown-canvas" height="28"></canvas>
+  </div>
+  <div id="pentagon-tuning">
+    <label>
+      Pentagon spacing
+      <input id="opt-penta-spacing" type="range" min="85" max="135" value="104">
+      <span id="penta-spacing-val">1.04</span>
+    </label>
+    <label>
+      Pentagon angle
+      <input id="opt-penta-angle" type="range" min="-30" max="30" value="10">
+      <span id="penta-angle-val">10°</span>
+    </label>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

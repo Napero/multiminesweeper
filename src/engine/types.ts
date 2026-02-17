@@ -6,7 +6,7 @@ export type TopologyMode =
   | "klein"
   | "projective";
 
-export type GridShape = "square" | "hex" | "triangle";
+export type GridShape = "square" | "hex" | "triangle" | "pentagon" | "irregular";
 
 export interface GameConfig {
   rows: number;

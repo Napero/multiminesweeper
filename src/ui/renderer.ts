@@ -1,6 +1,7 @@
 import { CellView, GameStatus, GridShape, TopologyMode } from "../engine/types";
 import { Game } from "../engine/game";
 import { neighboursForGrid } from "../engine/board";
+import { buildIrregularLayout, IrregularPoint } from "../engine/irregular";
 import {
   SpriteRect,
   SPRITE_CELL_CLOSED,
@@ -29,6 +30,198 @@ import {
   drawBombCross,
 } from "./fallback";
 
+const PENTAGON_PETALS = 6;
+const PENTAGON_DEG = Math.PI / 180;
+const PENTAGON_BASE_ROTATION_DEG = 10;
+const PENTAGON_BASE_FLOWER_STEP_X = 1.61;
+const PENTAGON_BASE_FLOWER_STEP_Y = 1.39;
+const PENTAGON_BASE_FLOWER_ROW_OFFSET = 0.805;
+const PENTAGON_CENTER_MARGIN = 0;
+const PENTAGON_SIDE_A = 0.74;
+const PENTAGON_SIDE_B = 0.34;
+
+export interface PentagonLayout {
+  spacingScale: number;
+  rotationDeg: number;
+}
+
+const pentagonLayout: PentagonLayout = {
+  spacingScale: 1.04,
+  rotationDeg: PENTAGON_BASE_ROTATION_DEG,
+};
+
+export function getPentagonLayout(): PentagonLayout {
+  return { ...pentagonLayout };
+}
+
+export function setPentagonLayout(next: Partial<PentagonLayout>): void {
+  if (typeof next.spacingScale === "number" && Number.isFinite(next.spacingScale)) {
+    pentagonLayout.spacingScale = Math.max(0.85, Math.min(1.35, next.spacingScale));
+  }
+  if (typeof next.rotationDeg === "number" && Number.isFinite(next.rotationDeg)) {
+    pentagonLayout.rotationDeg = Math.max(-30, Math.min(30, next.rotationDeg));
+  }
+}
+
+function pentagonStepX(): number {
+  return PENTAGON_BASE_FLOWER_STEP_X * pentagonLayout.spacingScale;
+}
+
+function pentagonStepY(): number {
+  return PENTAGON_BASE_FLOWER_STEP_Y * pentagonLayout.spacingScale;
+}
+
+function pentagonRowOffset(): number {
+  return PENTAGON_BASE_FLOWER_ROW_OFFSET * pentagonLayout.spacingScale;
+}
+
+interface IrregularMesh {
+  rows: number;
+  cols: number;
+  scale: number;
+  seed: number;
+  quads: Array<Array<{ x: number; y: number }>>;
+  offsetX: number;
+  offsetY: number;
+  width: number;
+  height: number;
+}
+
+
+function getPentagonPoints(row: number, col: number, cellW: number): Array<{ x: number; y: number }> {
+  const flowerCol = Math.floor(col / PENTAGON_PETALS);
+  const petal = ((col % PENTAGON_PETALS) + PENTAGON_PETALS) % PENTAGON_PETALS;
+  const cx =
+    (PENTAGON_CENTER_MARGIN +
+      flowerCol * pentagonStepX() +
+      (row % 2 === 0 ? 0 : pentagonRowOffset())) *
+    cellW;
+  const cy = (PENTAGON_CENTER_MARGIN + row * pentagonStepY()) * cellW;
+  const angle = (-90 + pentagonLayout.rotationDeg + petal * 60) * PENTAGON_DEG; // outward axis from the shared hub
+  const sideA = PENTAGON_SIDE_A * cellW;
+  const sideB = PENTAGON_SIDE_B * cellW;
+  const sideC = (PENTAGON_SIDE_A - PENTAGON_SIDE_B) * cellW;
+  const dirs = [30, -30, -90, -150];
+  const lens = [sideA, sideB, sideC, sideB];
+  const points = [{ x: cx, y: cy }];
+
+  let x = cx;
+  let y = cy;
+  for (let i = 0; i < dirs.length; i++) {
+    const theta = angle + dirs[i] * PENTAGON_DEG;
+    x += Math.cos(theta) * lens[i];
+    y += Math.sin(theta) * lens[i];
+    points.push({ x, y });
+  }
+
+  return points;
+}
+
+function boundsOfPoints(points: Array<{ x: number; y: number }>): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = points[0].x;
+  let minY = points[0].y;
+  let maxX = points[0].x;
+  let maxY = points[0].y;
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i];
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+interface PentagonBoardBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+function getPentagonBoardBounds(rows: number, cols: number, cellW: number): PentagonBoardBounds {
+  if (rows <= 0 || cols <= 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const bounds = boundsOfPoints(getPentagonPoints(r, c, cellW));
+      if (bounds.minX < minX) minX = bounds.minX;
+      if (bounds.minY < minY) minY = bounds.minY;
+      if (bounds.maxX > maxX) maxX = bounds.maxX;
+      if (bounds.maxY > maxY) maxY = bounds.maxY;
+    }
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function measurePentagonBoard(rows: number, cols: number, cellW: number): { width: number; height: number } {
+  const b = getPentagonBoardBounds(rows, cols, cellW);
+  const pad = cellW * 0.02;
+  return {
+    width: Math.ceil(Math.max(0, b.maxX - b.minX) + pad * 2),
+    height: Math.ceil(Math.max(0, b.maxY - b.minY) + pad * 2),
+  };
+}
+
+function buildIrregularMesh(rows: number, cols: number, scale: number, seed: number): IrregularMesh {
+  const layout = buildIrregularLayout(rows, cols, seed);
+  const cellW = CELL_SIZE * scale;
+  const cellH = CELL_HEIGHT * scale;
+  const quads = layout.polygons.map((poly: IrregularPoint[]) =>
+    poly.map((p) => ({ x: p.x * cellW, y: p.y * cellH })),
+  );
+  const minX = layout.minX * cellW;
+  const minY = layout.minY * cellH;
+  const maxX = layout.maxX * cellW;
+  const maxY = layout.maxY * cellH;
+  const pad = Math.max(1, scale);
+  const offsetX = pad - minX;
+  const offsetY = pad - minY;
+  return {
+    rows,
+    cols,
+    scale,
+    seed,
+    quads,
+    offsetX,
+    offsetY,
+    width: Math.ceil(maxX - minX + pad * 2),
+    height: Math.ceil(maxY - minY + pad * 2),
+  };
+}
+
+export function measureBoardPixels(rows: number, cols: number, shape: GridShape, scale = 1, seed = 0): { width: number; height: number } {
+  const cellW = CELL_SIZE * scale;
+  const cellH = CELL_HEIGHT * scale;
+  if (shape === "hex") {
+    const hexH = cellW * 2 / Math.sqrt(3);
+    const stepY = hexH * 0.75;
+    return {
+      width: Math.ceil(cols * cellW + cellW * 0.5),
+      height: Math.ceil((rows - 1) * stepY + hexH),
+    };
+  }
+  if (shape === "triangle") {
+    const triH = cellW * Math.sqrt(3) / 2;
+    const stepX = cellW * 0.5;
+    return {
+      width: Math.ceil(cols * stepX + cellW * 0.5),
+      height: Math.ceil(rows * triH),
+    };
+  }
+  if (shape === "pentagon") {
+    return measurePentagonBoard(rows, cols, cellW);
+  }
+  if (shape === "irregular") {
+    const mesh = buildIrregularMesh(rows, cols, scale, seed);
+    return { width: mesh.width, height: mesh.height };
+  }
+  return { width: Math.ceil(cols * cellW), height: Math.ceil(rows * cellH) };
+}
+
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private sheet: HTMLImageElement | null;
@@ -40,6 +233,9 @@ export class Renderer {
   private currentShape: GridShape = "square";
   private gridRows = 0;
   private gridCols = 0;
+  private pentagonOffsetX = 0;
+  private pentagonOffsetY = 0;
+  private irregularMesh: IrregularMesh | null = null;
 
   private get useFallback(): boolean {
     return !this.sheet;
@@ -59,25 +255,35 @@ export class Renderer {
     this.invertCtx = this.invertCanvas.getContext("2d")!;
   }
 
-  resize(rows: number, cols: number, shape: GridShape = "square"): void {
+  resize(rows: number, cols: number, shape: GridShape = "square", seed = 0): void {
     this.currentShape = shape;
     this.gridRows = rows;
     this.gridCols = cols;
-    const cellW = CELL_SIZE * this.scale;
-    const cellH = CELL_HEIGHT * this.scale;
-    let w = cols * cellW;
-    let h = rows * cellH;
+    let w = 0;
+    let h = 0;
 
-    if (shape === "hex") {
-      const hexH = cellW * 2 / Math.sqrt(3);
-      const stepY = hexH * 0.75;
-      w = cols * cellW + cellW * 0.5;
-      h = (rows - 1) * stepY + hexH;
-    } else if (shape === "triangle") {
-      const triH = cellW * Math.sqrt(3) / 2;
-      const stepX = cellW * 0.5;
-      w = cols * stepX + cellW * 0.5;
-      h = rows * triH;
+    if (shape === "pentagon") {
+      const cellW = CELL_SIZE * this.scale;
+      const bounds = getPentagonBoardBounds(rows, cols, cellW);
+      const pad = cellW * 0.02;
+      this.pentagonOffsetX = pad - bounds.minX;
+      this.pentagonOffsetY = pad - bounds.minY;
+      w = Math.ceil(Math.max(0, bounds.maxX - bounds.minX) + pad * 2);
+      h = Math.ceil(Math.max(0, bounds.maxY - bounds.minY) + pad * 2);
+      this.irregularMesh = null;
+    } else if (shape === "irregular") {
+      this.pentagonOffsetX = 0;
+      this.pentagonOffsetY = 0;
+      this.irregularMesh = buildIrregularMesh(rows, cols, this.scale, seed);
+      w = this.irregularMesh.width;
+      h = this.irregularMesh.height;
+    } else {
+      this.pentagonOffsetX = 0;
+      this.pentagonOffsetY = 0;
+      this.irregularMesh = null;
+      const size = measureBoardPixels(rows, cols, shape, this.scale);
+      w = size.width;
+      h = size.height;
     }
 
     this.canvas.width = w;
@@ -112,6 +318,39 @@ export class Renderer {
         const colGuess = Math.floor((px - rowOffsetX) / cellW);
         for (let cc = colGuess - 1; cc <= colGuess + 1; cc++) {
           if (cc < 0 || cc >= this.gridCols) continue;
+          if (this.pointInCellPolygon(rr, cc, px, py)) return { row: rr, col: cc };
+        }
+      }
+      return null;
+    }
+
+    if (this.currentShape === "pentagon") {
+      const stepY = CELL_SIZE * this.scale * pentagonStepY();
+      const stepX = CELL_SIZE * this.scale * pentagonStepX();
+      const rowGuess = Math.floor(py / stepY);
+      for (let rr = rowGuess - 2; rr <= rowGuess + 2; rr++) {
+        if (rr < 0 || rr >= this.gridRows) continue;
+        const rowOffsetX =
+          (PENTAGON_CENTER_MARGIN + (rr % 2 === 0 ? 0 : pentagonRowOffset())) *
+          CELL_SIZE *
+          this.scale;
+        const flowerGuess = Math.floor((px - rowOffsetX) / stepX);
+        for (let ff = flowerGuess - 2; ff <= flowerGuess + 2; ff++) {
+          if (ff < 0) continue;
+          for (let petal = 0; petal < PENTAGON_PETALS; petal++) {
+            const cc = ff * PENTAGON_PETALS + petal;
+            if (cc < 0 || cc >= this.gridCols) continue;
+            if (this.pointInCellPolygon(rr, cc, px, py)) return { row: rr, col: cc };
+          }
+        }
+      }
+      return null;
+    }
+
+    if (this.currentShape === "irregular") {
+      if (!this.irregularMesh) return null;
+      for (let rr = 0; rr < this.gridRows; rr++) {
+        for (let cc = 0; cc < this.gridCols; cc++) {
           if (this.pointInCellPolygon(rr, cc, px, py)) return { row: rr, col: cc };
         }
       }
@@ -242,7 +481,8 @@ export class Renderer {
     const baseOpen = view.opened || shouldOpenForReveal || view.wrongMarker || isPressed;
 
     // Compute inset square for content sprites, centered on polygon centroid
-    const insetFactor = this.currentShape === "hex" ? 0.65 : 0.55;
+    const insetFactor =
+      this.currentShape === "hex" ? 0.65 : this.currentShape === "irregular" ? 0.6 : 0.55;
     let cx = 0, cy = 0;
     for (const p of g.points) { cx += p.x; cy += p.y; }
     cx /= g.points.length;
@@ -257,7 +497,7 @@ export class Renderer {
       this.drawOpenCellFill(g.points, view.exploded);
       this.drawCellOutline(g.points);
     } else {
-      this.drawCellBevel(g.points);
+      this.drawCellBevel(g.points, this.currentShape);
     }
 
     if (view.exploded) {
@@ -323,7 +563,7 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawCellBevel(points: Array<{ x: number; y: number }>): void {
+  private drawCellBevel(points: Array<{ x: number; y: number }>, shape: string = "square"): void {
     const ctx = this.ctx;
 
     // Compute center
@@ -364,7 +604,7 @@ export class Renderer {
     ctx.restore();
 
     // 2) Draw inner (smaller) polygon filled with medium gray (the cell face)
-    const inset = 0.78;
+    const inset = shape === "triangle" ? 0.62 : 0.78;
     const inner = points.map((p) => ({
       x: cx + (p.x - cx) * inset,
       y: cy + (p.y - cy) * inset,
@@ -419,6 +659,49 @@ export class Renderer {
             { x: dx + dw * 0.5, y: dy + triH },
           ];
       return { dx, dy, dw, dh: triH, points };
+    }
+
+    if (this.currentShape === "pentagon") {
+      const points = getPentagonPoints(row, col, dw).map((p) => ({
+        x: p.x + this.pentagonOffsetX,
+        y: p.y + this.pentagonOffsetY,
+      }));
+      const bounds = boundsOfPoints(points);
+      return {
+        dx: bounds.minX,
+        dy: bounds.minY,
+        dw: bounds.maxX - bounds.minX,
+        dh: bounds.maxY - bounds.minY,
+        points,
+      };
+    }
+
+    if (this.currentShape === "irregular" && this.irregularMesh) {
+      const idx = row * this.gridCols + col;
+      const quad = this.irregularMesh.quads[idx];
+      if (!quad) {
+        const dx = col * dw;
+        const dy = row * dh;
+        const points = [
+          { x: dx, y: dy },
+          { x: dx + dw, y: dy },
+          { x: dx + dw, y: dy + dh },
+          { x: dx, y: dy + dh },
+        ];
+        return { dx, dy, dw, dh, points };
+      }
+      const points = quad.map((p) => ({
+        x: p.x + this.irregularMesh!.offsetX,
+        y: p.y + this.irregularMesh!.offsetY,
+      }));
+      const bounds = boundsOfPoints(points);
+      return {
+        dx: bounds.minX,
+        dy: bounds.minY,
+        dw: bounds.maxX - bounds.minX,
+        dh: bounds.maxY - bounds.minY,
+        points,
+      };
     }
 
     const dx = col * dw;
@@ -606,6 +889,7 @@ export class Renderer {
     rows: number,
     cols: number,
     topology: TopologyMode,
+    seed = 0,
     originRow = 0,
     originCol = 0,
   ): void {
@@ -614,7 +898,7 @@ export class Renderer {
 
     const targets = [
       { row, col },
-      ...neighboursForGrid(row, col, rows, cols, topology, this.currentShape),
+      ...neighboursForGrid(row, col, rows, cols, topology, this.currentShape, seed),
     ];
 
     for (const { row: r, col: c } of targets) {

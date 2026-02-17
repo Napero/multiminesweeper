@@ -1,5 +1,6 @@
 import { Cell, GameConfig, GridShape, Pos, TopologyMode } from "./types";
 import { createRng } from "./rng";
+import { buildIrregularLayout } from "./irregular";
 
 interface Bucket {
   items: Pos[];
@@ -122,6 +123,79 @@ export function neighboursForTopology(
   return neighboursForGrid(row, col, rows, cols, topology, "square");
 }
 
+const PENTAGON_PETALS = 6;
+
+const PENTAGON_EXTERNAL_BY_PETAL: Array<Array<{ dir: number; targetPetal: number }>> = [
+  [
+    { dir: 1, targetPetal: 3 },
+    { dir: 2, targetPetal: 2 },
+    { dir: 1, targetPetal: 4 },
+  ],
+  [
+    { dir: 0, targetPetal: 4 },
+    { dir: 0, targetPetal: 5 },
+    { dir: 1, targetPetal: 3 },
+  ],
+  [
+    { dir: 5, targetPetal: 5 },
+    { dir: 0, targetPetal: 4 },
+    { dir: 5, targetPetal: 0 },
+  ],
+  [
+    { dir: 4, targetPetal: 0 },
+    { dir: 5, targetPetal: 5 },
+    { dir: 4, targetPetal: 1 },
+  ],
+  [
+    { dir: 3, targetPetal: 1 },
+    { dir: 3, targetPetal: 2 },
+    { dir: 4, targetPetal: 0 },
+  ],
+  [
+    { dir: 2, targetPetal: 2 },
+    { dir: 3, targetPetal: 1 },
+    { dir: 2, targetPetal: 3 },
+  ],
+];
+
+function pentagonMoveFlower(row: number, flowerCol: number, dir: number): { row: number; flowerCol: number } {
+  const oddRow = row % 2 !== 0;
+  switch (dir) {
+    case 0: // E
+      return { row, flowerCol: flowerCol + 1 };
+    case 1: // NE
+      return { row: row - 1, flowerCol: flowerCol + (oddRow ? 1 : 0) };
+    case 2: // NW
+      return { row: row - 1, flowerCol: flowerCol + (oddRow ? 0 : -1) };
+    case 3: // W
+      return { row, flowerCol: flowerCol - 1 };
+    case 4: // SW
+      return { row: row + 1, flowerCol: flowerCol + (oddRow ? 0 : -1) };
+    default: // 5: SE
+      return { row: row + 1, flowerCol: flowerCol + (oddRow ? 1 : 0) };
+  }
+}
+
+function pentagonNeighbourDeltas(row: number, col: number): Array<{ dr: number; dc: number }> {
+  const flowerCol = Math.floor(col / PENTAGON_PETALS);
+  const petal = ((col % PENTAGON_PETALS) + PENTAGON_PETALS) % PENTAGON_PETALS;
+  const baseCol = flowerCol * PENTAGON_PETALS;
+  const deltas: Array<{ dr: number; dc: number }> = [];
+
+  const leftPetal = (petal + PENTAGON_PETALS - 1) % PENTAGON_PETALS;
+  const rightPetal = (petal + 1) % PENTAGON_PETALS;
+  deltas.push({ dr: 0, dc: baseCol + leftPetal - col });
+  deltas.push({ dr: 0, dc: baseCol + rightPetal - col });
+
+  for (const link of PENTAGON_EXTERNAL_BY_PETAL[petal]) {
+    const next = pentagonMoveFlower(row, flowerCol, link.dir);
+    const targetCol = next.flowerCol * PENTAGON_PETALS + link.targetPetal;
+    deltas.push({ dr: next.row - row, dc: targetCol - col });
+  }
+
+  return deltas;
+}
+
 function shapeNeighbourDeltas(row: number, col: number, shape: GridShape): Array<{ dr: number; dc: number }> {
   if (shape === "square") {
     const deltas: Array<{ dr: number; dc: number }> = [];
@@ -157,6 +231,21 @@ function shapeNeighbourDeltas(row: number, col: number, shape: GridShape): Array
         ];
   }
 
+  if (shape === "pentagon") {
+    return pentagonNeighbourDeltas(row, col);
+  }
+
+  if (shape === "irregular") {
+    const deltas: Array<{ dr: number; dc: number }> = [];
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        deltas.push({ dr, dc });
+      }
+    }
+    return deltas;
+  }
+
   const pointsUp = (row + col) % 2 === 0;
   return pointsUp
     ? [
@@ -178,7 +267,16 @@ export function neighboursForGrid(
   cols: number,
   topology: TopologyMode,
   shape: GridShape,
+  seed = 0,
 ): Pos[] {
+  if (shape === "irregular") {
+    if (row < 0 || row >= rows || col < 0 || col >= cols) return [];
+    const layout = buildIrregularLayout(rows, cols, seed);
+    const idx = row * cols + col;
+    const ns = layout.neighbours[idx] ?? [];
+    return ns.map((n) => ({ row: Math.floor(n / cols), col: n % cols }));
+  }
+
   const result: Pos[] = [];
   const seen = new Set<string>();
   for (const { dr, dc } of shapeNeighbourDeltas(row, col, shape)) {
@@ -337,12 +435,13 @@ export function computeHints(
   cols: number,
   topology: TopologyMode = "plane",
   shape: GridShape = "square",
+  seed = 0,
 ): void {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       let sum = 0;
       let hasAdj = false;
-      for (const n of neighboursForGrid(r, c, rows, cols, topology, shape)) {
+      for (const n of neighboursForGrid(r, c, rows, cols, topology, shape, seed)) {
         const mc = grid[n.row][n.col].mineCount;
         sum += mc;
         if (mc !== 0) hasAdj = true;

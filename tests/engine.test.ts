@@ -140,6 +140,40 @@ describe("neighbours", () => {
     }
   });
 
+  it("pentagon grid has 5 neighbors for an interior cell", () => {
+    const n = neighboursForGrid(4, 12, 10, 24, "plane", "pentagon");
+    expect(n).toHaveLength(5);
+  });
+
+  it("pentagon corner has fewer than 5 neighbors", () => {
+    const n = neighboursForGrid(0, 0, 10, 24, "plane", "pentagon");
+    expect(n.length).toBeLessThan(5);
+  });
+
+  it("pentagon neighbors are unique and never include itself", () => {
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 20; c++) {
+        const n = neighboursForGrid(r, c, 8, 20, "plane", "pentagon");
+        const keys = n.map((p) => `${p.row},${p.col}`);
+        expect(new Set(keys).size).toBe(keys.length);
+        expect(n.some((p) => p.row === r && p.col === c)).toBe(false);
+      }
+    }
+  });
+
+  it("irregular grid interior has variable neighbors (not fixed 8)", () => {
+    const n = neighboursForGrid(3, 3, 8, 8, "plane", "irregular", 42);
+    expect(n.length).toBeGreaterThanOrEqual(2);
+    expect(n.length).toBeLessThanOrEqual(8);
+  });
+
+  it("irregular grid neighbors are unique and never include itself", () => {
+    const n = neighboursForGrid(0, 0, 8, 8, "plane", "irregular", 42);
+    const keys = n.map((p) => `${p.row},${p.col}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(n.some((p) => p.row === 0 && p.col === 0)).toBe(false);
+  });
+
   it("hex + torus wraps correctly", () => {
     const n = neighboursForGrid(0, 0, 6, 6, "torus", "hex");
     // Should have 6 neighbors, some wrapping around

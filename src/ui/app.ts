@@ -1,11 +1,13 @@
 import { DEFAULT_CONFIG, Game, GameConfig, GameStatus, GridShape, TopologyMode } from "../engine/index";
-import { Renderer } from "./renderer";
+import { Renderer, getPentagonLayout, measureBoardPixels, setPentagonLayout } from "./renderer";
 import { InputHandler } from "./input";
 import { loadSpritesheet } from "../sprites";
-import { CELL_SIZE, CELL_HEIGHT, SPRITE_BOMB, SpriteRect } from "../sprites";
+import { SPRITE_BOMB, SpriteRect } from "../sprites";
 import { Smiley, SmileyState } from "./smiley";
 import { ToolbarButton } from "./toolbar-button";
 import { drawBomb } from "./fallback";
+
+const PENTAGON_PETALS = 6;
 
 const PRESETS: Record<string, Partial<GameConfig>> = {
   beginner:     { rows: 9,  cols: 9,  minesTotal: 30,  maxMinesPerCell: 4, density: 0.7 },
@@ -21,6 +23,10 @@ const PRESETS: Record<string, Partial<GameConfig>> = {
   klein: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "klein" },
   hex: { rows: 14, cols: 20, minesTotal: 130, maxMinesPerCell: 6, density: 0.6, gridShape: "hex" },
   triangle: { rows: 12, cols: 30, minesTotal: 150, maxMinesPerCell: 6, density: 0.6, gridShape: "triangle" },
+  // For pentagon mode, rows/cols represent flower-grid dimensions.
+  pentagon: { rows: 6, cols: 9, minesTotal: 155, maxMinesPerCell: 6, density: 0.6, gridShape: "pentagon" },
+  "irregular-rectangle": { rows: 16, cols: 24, minesTotal: 180, maxMinesPerCell: 6, density: 0.6, gridShape: "irregular" },
+  irregular: { rows: 16, cols: 24, minesTotal: 180, maxMinesPerCell: 6, density: 0.6, gridShape: "irregular" }, // legacy alias
 };
 
 function parseSeedInput(seedStr: string): number {
@@ -96,6 +102,17 @@ export class App {
   private breakdownInvertCanvas = document.createElement("canvas");
   private breakdownInvertCtx = this.breakdownInvertCanvas.getContext("2d")!;
   private seedLocked = false;
+  private pentagonSpacingScale = getPentagonLayout().spacingScale;
+  private pentagonAngleDeg = getPentagonLayout().rotationDeg;
+
+  private normalizeConfigForEngine(cfg: GameConfig): GameConfig {
+    if (cfg.gridShape !== "pentagon") return cfg;
+    return {
+      ...cfg,
+      rows: Math.max(1, Math.floor(cfg.rows)),
+      cols: Math.max(1, Math.floor(cfg.cols)) * PENTAGON_PETALS,
+    };
+  }
 
   constructor(canvas: HTMLCanvasElement, config: Partial<GameConfig> = {}) {
     this.canvas = canvas;
@@ -191,6 +208,29 @@ export class App {
     densitySlider?.addEventListener("input", () => {
       if (densityLabel) densityLabel.textContent = (parseInt(densitySlider.value, 10) / 100).toFixed(2);
     });
+    const shapeSelect = document.getElementById("opt-shape") as HTMLSelectElement | null;
+    shapeSelect?.addEventListener("change", () => this.updatePentagonShapeNoteVisibility());
+
+    const pentSpacing = document.getElementById("opt-penta-spacing") as HTMLInputElement | null;
+    const pentAngle = document.getElementById("opt-penta-angle") as HTMLInputElement | null;
+    const pentSpacingVal = document.getElementById("penta-spacing-val");
+    const pentAngleVal = document.getElementById("penta-angle-val");
+    if (pentSpacing) pentSpacing.value = String(Math.round(this.pentagonSpacingScale * 100));
+    if (pentAngle) pentAngle.value = String(Math.round(this.pentagonAngleDeg));
+    if (pentSpacingVal) pentSpacingVal.textContent = this.pentagonSpacingScale.toFixed(2);
+    if (pentAngleVal) pentAngleVal.textContent = `${Math.round(this.pentagonAngleDeg)}°`;
+    pentSpacing?.addEventListener("input", () => {
+      this.pentagonSpacingScale = Math.max(0.85, Math.min(1.35, parseInt(pentSpacing.value, 10) / 100));
+      if (pentSpacingVal) pentSpacingVal.textContent = this.pentagonSpacingScale.toFixed(2);
+      setPentagonLayout({ spacingScale: this.pentagonSpacingScale });
+      if (this.game?.gridShape === "pentagon") this.onResize();
+    });
+    pentAngle?.addEventListener("input", () => {
+      this.pentagonAngleDeg = Math.max(-30, Math.min(30, parseInt(pentAngle.value, 10)));
+      if (pentAngleVal) pentAngleVal.textContent = `${Math.round(this.pentagonAngleDeg)}°`;
+      setPentagonLayout({ rotationDeg: this.pentagonAngleDeg });
+      if (this.game?.gridShape === "pentagon") this.render();
+    });
 
     window.addEventListener("resize", () => this.onResize());
 
@@ -265,6 +305,7 @@ export class App {
     }, { passive: true });
 
     this.newGame(this.config);
+    this.updatePentagonTuningVisibility();
     // Global keyboard: ? opens help, Esc closes
     window.addEventListener("keydown", this.onGlobalKey);
   }
@@ -339,6 +380,11 @@ export class App {
     if (params.has("seed")) {
       cfg.seed = parseSeedInput(params.get("seed")!);
       this.seedLocked = true;
+    }
+
+    // Backward compatibility: older pentagon hashes used cols as raw cells.
+    if (cfg.gridShape === "pentagon" && typeof cfg.cols === "number" && cfg.cols >= 18 && cfg.cols % PENTAGON_PETALS === 0) {
+      cfg.cols = Math.floor(cfg.cols / PENTAGON_PETALS);
     }
     return cfg;
   }
@@ -417,6 +463,7 @@ export class App {
 
     const densityLabel = document.getElementById("density-val");
     if (densityLabel) densityLabel.textContent = cfg.density.toFixed(2);
+    this.updatePentagonShapeNoteVisibility();
   }
 
   newGame(config?: Partial<GameConfig>, options?: { lockSeed?: boolean }): void {
@@ -431,11 +478,17 @@ export class App {
     }
     if (this.input) this.input.detach();
 
-    this.game = new Game(this.config);
+    setPentagonLayout({
+      spacingScale: this.pentagonSpacingScale,
+      rotationDeg: this.pentagonAngleDeg,
+    });
+    const logicalConfig: GameConfig = { ...DEFAULT_CONFIG, ...this.config };
+    const engineConfig = this.normalizeConfigForEngine(logicalConfig);
+    this.game = new Game(engineConfig);
 
     const scale = this.computeScale();
     this.renderer = new Renderer(this.canvas, this.sheet, scale);
-    this.renderer.resize(this.game.rows, this.game.cols, this.game.gridShape);
+    this.renderer.resize(this.game.rows, this.game.cols, this.game.gridShape, this.game.config.seed);
 
     this.input = new InputHandler(
       this.canvas,
@@ -513,6 +566,7 @@ export class App {
     this.hintBtn?.setActive(false);
     this.updateTimerDisplay();
     this.render();
+    this.updatePentagonTuningVisibility();
     this.writeConfigToHash();
   }
 
@@ -564,21 +618,9 @@ export class App {
     const maxW = (container?.parentElement?.clientWidth ?? window.innerWidth) - 24;
     const maxH = window.innerHeight - padding - 80;
 
-    const rows = this.game.rows;
-    const cols = this.game.cols;
-    let boardW = cols * CELL_SIZE;
-    let boardH = rows * CELL_HEIGHT;
-
-    const shape = this.game.gridShape;
-    if (shape === "hex") {
-      const hexH = CELL_SIZE * 2 / Math.sqrt(3);
-      boardW = cols * CELL_SIZE + CELL_SIZE * 0.5;
-      boardH = (rows - 1) * hexH * 0.75 + hexH;
-    } else if (shape === "triangle") {
-      const triH = CELL_SIZE * Math.sqrt(3) / 2;
-      boardW = cols * CELL_SIZE * 0.5 + CELL_SIZE * 0.5;
-      boardH = rows * triH;
-    }
+    const size = measureBoardPixels(this.game.rows, this.game.cols, this.game.gridShape, 1, this.game.config.seed);
+    const boardW = size.width;
+    const boardH = size.height;
 
     const scaleX = maxW / boardW;
     const scaleY = maxH / boardH;
@@ -590,7 +632,7 @@ export class App {
     if (!this.game) return;
     const scale = this.computeScale();
     this.renderer.scale = scale;
-    this.renderer.resize(this.game.rows, this.game.cols, this.game.gridShape);
+    this.renderer.resize(this.game.rows, this.game.cols, this.game.gridShape, this.game.config.seed);
     this.render();
   }
 
@@ -601,10 +643,24 @@ export class App {
         this.hintHoverPos.row, this.hintHoverPos.col,
         this.game.rows, this.game.cols,
         this.game.topology,
+        this.game.config.seed,
       );
     }
     this.updateSmiley();
     this.updateStatusBar();
+  }
+
+  private updatePentagonTuningVisibility(): void {
+    const panel = document.getElementById("pentagon-tuning");
+    if (!panel || !this.game) return;
+    panel.style.display = this.game.gridShape === "pentagon" ? "flex" : "none";
+  }
+
+  private updatePentagonShapeNoteVisibility(): void {
+    const note = document.getElementById("opt-pentagon-note");
+    const shapeEl = document.getElementById("opt-shape") as HTMLSelectElement | null;
+    if (!note || !shapeEl) return;
+    note.style.display = shapeEl.value === "pentagon" ? "block" : "none";
   }
 
   private updateSmiley(): void {

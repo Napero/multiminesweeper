@@ -39,7 +39,7 @@ export class Game {
   private initBoard(excludePositions: Pos[]): void {
     this.grid = createEmptyGrid(this.rows, this.cols);
     placeMines(this.grid, this.config, excludePositions);
-    computeHints(this.grid, this.rows, this.cols, this.config.topology, this.config.gridShape);
+    computeHints(this.grid, this.rows, this.cols, this.config.topology, this.config.gridShape, this.config.seed);
 
     this.safeCellCount = 0;
     for (let r = 0; r < this.rows; r++) {
@@ -92,6 +92,7 @@ export class Game {
       this.cols,
       this.config.topology,
       this.config.gridShape,
+      this.config.seed,
     );
   }
 
