@@ -70,115 +70,6 @@ function hashString(s: string): number {
   return h;
 }
 
-interface SharePayloadV1 {
-  v: 1;
-  r: number;
-  c: number;
-  m: number;
-  x: number;
-  d: number;
-  n: 0 | 1;
-  t: TopologyMode;
-  g: GridShape;
-  s?: number;
-}
-
-function toBase64Url(input: string): string {
-  const bytes = new TextEncoder().encode(input);
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function fromBase64Url(input: string): string {
-  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const padLength = (4 - (normalized.length % 4)) % 4;
-  const padded = normalized + "=".repeat(padLength);
-  const binary = atob(padded);
-  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
-function encodeShareId(config: Partial<GameConfig>, includeSeed: boolean): string {
-  const resolved: GameConfig = { ...DEFAULT_CONFIG, ...config };
-  const payload: SharePayloadV1 = {
-    v: 1,
-    r: resolved.rows,
-    c: resolved.cols,
-    m: resolved.minesTotal,
-    x: resolved.maxMinesPerCell,
-    d: Math.round(resolved.density * 1000) / 1000,
-    n: resolved.negativeMines ? 1 : 0,
-    t: resolved.topology,
-    g: resolved.gridShape,
-  };
-  if (includeSeed) payload.s = resolved.seed;
-  return toBase64Url(JSON.stringify(payload));
-}
-
-function decodeShareId(id: string): Partial<GameConfig> | null {
-  try {
-    if (!/^[A-Za-z0-9_-]+$/.test(id)) return null;
-    const raw = fromBase64Url(id);
-    const parsed = JSON.parse(raw) as Partial<SharePayloadV1>;
-    if (parsed.v !== 1) return null;
-    if (
-      typeof parsed.r !== "number" ||
-      typeof parsed.c !== "number" ||
-      typeof parsed.m !== "number" ||
-      typeof parsed.x !== "number" ||
-      typeof parsed.d !== "number" ||
-      (parsed.n !== 0 && parsed.n !== 1) ||
-      typeof parsed.t !== "string" ||
-      typeof parsed.g !== "string"
-    ) {
-      return null;
-    }
-
-    const cfg: Partial<GameConfig> = {
-      rows: Math.max(5, Math.min(100, Math.floor(parsed.r))),
-      cols: Math.max(5, Math.min(100, Math.floor(parsed.c))),
-      minesTotal: Math.max(1, Math.floor(parsed.m)),
-      maxMinesPerCell: Math.max(1, Math.min(6, Math.floor(parsed.x))),
-      density: Math.max(0, Math.min(1, parsed.d)),
-      negativeMines: parsed.n === 1,
-      topology: parsed.t,
-      gridShape: parsed.g,
-      safeFirstClick: true,
-    };
-    if (typeof parsed.s === "number" && Number.isFinite(parsed.s)) {
-      cfg.seed = Math.floor(parsed.s);
-    }
-    return cfg;
-  } catch {
-    return null;
-  }
-}
-
-function readShareIdFromLocation(): string | null {
-  const url = new URL(window.location.href);
-  const queryId = url.searchParams.get("id") ?? url.searchParams.get("cfg");
-  if (queryId) return queryId;
-
-  const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
-  if (hash) {
-    if (hash.startsWith("/")) return hash.slice(1);
-    const hashUrl = new URL(`https://dummy.invalid/${hash}`);
-    const hashQueryId = hashUrl.searchParams.get("id") ?? hashUrl.searchParams.get("cfg");
-    if (hashQueryId) return hashQueryId;
-    return hash;
-  }
-
-  const base = import.meta.env.BASE_URL ?? "/";
-  const normalizedBase = base.endsWith("/") ? base : `${base}/`;
-  const path = url.pathname;
-  if (!path.startsWith(normalizedBase)) return null;
-  const rest = path.slice(normalizedBase.length).replace(/^\/+/, "");
-  if (!rest) return null;
-  const firstSegment = rest.split("/")[0];
-  return firstSegment || null;
-}
-
 export class App {
   private game!: Game;
   private renderer!: Renderer;
@@ -286,9 +177,6 @@ export class App {
       this.closeCustomModal();
       this.newGame(cfg, { lockSeed: hasSeed });
     });
-    document.getElementById("copy-link-with-seed")?.addEventListener("click", () => this.copyCurrentShareLink(true, true));
-    document.getElementById("copy-link-no-seed")?.addEventListener("click", () => this.copyCurrentShareLink(false, true));
-    document.getElementById("opt-seed")?.addEventListener("input", () => this.updateCopyButtonsVisibility());
     document.getElementById("help-close")?.addEventListener("click", this.helpCloseClickHandler);
     document.getElementById("help-overlay")?.addEventListener("click", this.helpOverlayClickHandler);
 
@@ -371,10 +259,7 @@ export class App {
       this.updateSmiley();
     }, { passive: true });
 
-    const sharedId = readShareIdFromLocation();
-    const sharedConfig = sharedId ? decodeShareId(sharedId) : null;
-    if (sharedConfig) this.config = { ...this.config, ...sharedConfig };
-    this.newGame(this.config, { lockSeed: typeof sharedConfig?.seed === "number" });
+    this.newGame(this.config);
     // Global keyboard: ? opens help, Esc closes
     window.addEventListener("keydown", this.onGlobalKey);
   }
@@ -403,7 +288,6 @@ export class App {
 
   private openCustomModal(): void {
     this.syncCustomModalFromCurrentConfig();
-    this.updateCopyButtonsVisibility();
     document.getElementById("custom-overlay")?.classList.add("open");
   }
 
@@ -417,13 +301,6 @@ export class App {
 
   private closeHelp(): void {
     document.getElementById("help-overlay")?.classList.remove("open");
-  }
-
-  private buildSharePath(config: Partial<GameConfig>, includeSeed: boolean): string {
-    const base = import.meta.env.BASE_URL ?? "/";
-    const normalizedBase = base.endsWith("/") ? base : `${base}/`;
-    const shareId = encodeShareId(config, includeSeed);
-    return `${normalizedBase}${shareId}`;
   }
 
   private setInputValue(id: string, value: string): void {
@@ -462,55 +339,6 @@ export class App {
 
     const densityLabel = document.getElementById("density-val");
     if (densityLabel) densityLabel.textContent = cfg.density.toFixed(2);
-  }
-
-  private updateCopyButtonsVisibility(): void {
-    const withSeedBtn = document.getElementById("copy-link-with-seed") as HTMLButtonElement | null;
-    if (!withSeedBtn) return;
-    const seedEl = document.getElementById("opt-seed") as HTMLInputElement | null;
-    const hasSeed = (seedEl?.value.trim() ?? "") !== "";
-    withSeedBtn.style.display = hasSeed ? "" : "none";
-  }
-
-  private updateShareUrlForConfig(config: Partial<GameConfig>, includeSeed: boolean): void {
-    const nextPath = this.buildSharePath(config, includeSeed);
-    window.history.replaceState(null, "", nextPath);
-  }
-
-  private async copyCurrentShareLink(includeSeed: boolean, preferModalValues = false): Promise<void> {
-    let sourceConfig: Partial<GameConfig> = this.config;
-    if (preferModalValues) {
-      const { config } = readConfigFromModal();
-      sourceConfig = { ...this.config, ...config };
-    }
-    const relativePath = this.buildSharePath(sourceConfig, includeSeed);
-    const absoluteUrl = new URL(relativePath, window.location.origin).toString();
-    const status = document.getElementById("status-bar");
-
-    const setStatus = (text: string) => {
-      if (!status) return;
-      status.textContent = text;
-      this.renderBreakdown();
-    };
-
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(absoluteUrl);
-      } else {
-        const area = document.createElement("textarea");
-        area.value = absoluteUrl;
-        area.style.position = "fixed";
-        area.style.opacity = "0";
-        document.body.appendChild(area);
-        area.focus();
-        area.select();
-        document.execCommand("copy");
-        document.body.removeChild(area);
-      }
-      setStatus(includeSeed ? "URL copied (with seed)." : "URL copied (no seed).");
-    } catch {
-      setStatus("Could not copy URL.");
-    }
   }
 
   newGame(config?: Partial<GameConfig>, options?: { lockSeed?: boolean }): void {
@@ -607,7 +435,6 @@ export class App {
     this.hintBtn?.setActive(false);
     this.updateTimerDisplay();
     this.render();
-    this.updateShareUrlForConfig(this.config, false);
   }
 
   giveUp(): void {
