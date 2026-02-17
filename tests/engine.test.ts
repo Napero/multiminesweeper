@@ -209,6 +209,31 @@ describe("placeMines", () => {
     }
   });
 
+  it("respects maxMinesPerCell=1 (no cell exceeds 1 mine)", () => {
+    for (const seed of [1, 42, 999, 7777]) {
+      const config = {
+        rows: 10,
+        cols: 10,
+        minesTotal: 30,
+        maxMinesPerCell: 1,
+        seed,
+        safeFirstClick: false,
+        density: 0.6,
+        negativeMines: false,
+        topology: "plane" as const,
+        gridShape: "square" as const,
+      };
+      const grid = createEmptyGrid(10, 10);
+      placeMines(grid, config);
+      for (const row of grid) {
+        for (const cell of row) {
+          expect(cell.mineCount).toBeLessThanOrEqual(1);
+          expect(cell.mineCount).toBeGreaterThanOrEqual(0);
+        }
+      }
+    }
+  });
+
   it("excludes positions when specified", () => {
     const config = {
       rows: 5,
@@ -378,6 +403,56 @@ describe("Game - cycleMarker", () => {
     game.open(0, 0);
     game.cycleMarker(0, 0);
     expect(game.grid[0][0].markerCount).toBe(0);
+  });
+});
+
+// ─── Game: cycleMarkerDown ──────────────────────────────────────────────────
+
+describe("Game - cycleMarkerDown", () => {
+  it("does not go negative when negativeMines is false", () => {
+    const game = new Game({
+      rows: 5,
+      cols: 5,
+      minesTotal: 0,
+      maxMinesPerCell: 1,
+      seed: 1,
+      safeFirstClick: false,
+      negativeMines: false,
+    });
+    const cell = game.grid[0][0];
+    expect(cell.markerCount).toBe(0);
+    // Cycling down from 0 should stay at 0 when negativeMines=false
+    game.cycleMarkerDown(0, 0);
+    expect(cell.markerCount).toBe(0);
+    // Set to 1, then down should go to 0
+    game.cycleMarker(0, 0);
+    expect(cell.markerCount).toBe(1);
+    game.cycleMarkerDown(0, 0);
+    expect(cell.markerCount).toBe(0);
+    // Another down should stay at 0
+    game.cycleMarkerDown(0, 0);
+    expect(cell.markerCount).toBe(0);
+  });
+
+  it("cycles 0→-1→-2→…→-max→0 when negativeMines is true", () => {
+    const game = new Game({
+      rows: 5,
+      cols: 5,
+      minesTotal: 0,
+      maxMinesPerCell: 3,
+      seed: 1,
+      safeFirstClick: false,
+      negativeMines: true,
+    });
+    const cell = game.grid[0][0];
+    expect(cell.markerCount).toBe(0);
+    for (let i = -1; i >= -3; i--) {
+      game.cycleMarkerDown(0, 0);
+      expect(cell.markerCount).toBe(i);
+    }
+    // At -max, cycling down should return to 0
+    game.cycleMarkerDown(0, 0);
+    expect(cell.markerCount).toBe(0);
   });
 });
 

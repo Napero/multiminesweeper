@@ -241,8 +241,6 @@ export class Game {
       cell.markerCount = 0;
     } else {
       cell.markerCount++;
-      // Skip 0 when going up (0 → 1)
-      if (cell.markerCount === 0) cell.markerCount = 1;
     }
   }
 
@@ -255,11 +253,9 @@ export class Game {
     const min = this.config.negativeMines ? -this.config.maxMinesPerCell : 0;
     if (cell.markerCount <= min) {
       cell.markerCount = 0;
-    } else {
-      cell.markerCount--;
-      // Skip 0 when going down (0 → -1)
-      if (cell.markerCount === 0) cell.markerCount = -1;
+      return;
     }
+    cell.markerCount--;
   }
 
   // Open unmarked neighbours if marker sum matches hint

@@ -260,7 +260,11 @@ export function placeMines(
     if (cell.mineCount === 1) {
       // Was in empty, move to partial
       removeFromBucket(empty, target);
-      addToBucket(partial, target);
+      if (cell.mineCount >= maxMinesPerCellCapped) {
+        // Already full (maxMinesPerCell === 1), don't add to partial
+      } else {
+        addToBucket(partial, target);
+      }
     } else if (cell.mineCount >= maxMinesPerCellCapped) {
       // Full, remove from partial
       removeFromBucket(partial, target);
@@ -312,7 +316,11 @@ export function placeMines(
 
       if (cell.mineCount === -1) {
         removeFromBucket(negEmpty, target);
-        addToBucket(negPartial, target);
+        if (cell.mineCount <= -maxMinesPerCellCapped) {
+          // Already full (maxMinesPerCell === 1), don't add to partial
+        } else {
+          addToBucket(negPartial, target);
+        }
       } else if (cell.mineCount <= -maxMinesPerCellCapped) {
         removeFromBucket(negPartial, target);
       }
