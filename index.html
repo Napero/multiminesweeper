@@ -218,6 +218,9 @@
         <button class="preset" data-preset="mobius">Möbius strip topology</button>
         <button class="preset" data-preset="klein">Klein bottle topology</button>
         <hr>
+        <button class="preset" data-preset="hex">Hex grid</button>
+        <button class="preset" data-preset="triangle">Triangle grid</button>
+        <hr>
         <button class="preset" data-preset="custom">Custom…</button>
       </div>
     </div>
@@ -241,6 +244,13 @@
       <label>Density <input id="opt-density" type="range" min="0" max="100" value="60"> <span id="density-val">0.60</span></label>
       <label>Seed <input id="opt-seed" type="text" value="" placeholder="random"></label>
       <label>Negative mines <input id="opt-negative" type="checkbox"></label>
+      <label>Grid shape
+        <select id="opt-shape" style="width:120px; font-size:11px; font-family:'Pixelated MS Sans Serif', Arial, sans-serif;">
+          <option value="square">Square</option>
+          <option value="hex">Hex</option>
+          <option value="triangle">Triangle</option>
+        </select>
+      </label>
       <label>Topology
         <select id="opt-topology" style="width:120px; font-size:11px; font-family:'Pixelated MS Sans Serif', Arial, sans-serif;">
           <option value="plane">Plane (classic)</option>
@@ -274,6 +284,7 @@
       </ul>
       <h4 style="margin:6px 0 4px 0;">Modes</h4>
       <ul style="list-style:none; padding-left:0; margin:0 0 8px 0;">
+        <li><strong>Grid shapes:</strong> Square, Hex, Triangle</li>
         <li><strong>Topologies:</strong> Plane, Cylinder, Torus, Möbius strip, Klein bottle, Projective plane</li>
       </ul>
       <h4 style="margin:6px 0 4px 0;">Toolbar</h4>

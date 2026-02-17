@@ -10,7 +10,7 @@ import {
   createEmptyGrid,
   placeMines,
   computeHints,
-  neighboursForTopology,
+  neighboursForGrid,
 } from "./board";
 
 export class Game {
@@ -39,7 +39,7 @@ export class Game {
   private initBoard(excludePositions: Pos[]): void {
     this.grid = createEmptyGrid(this.rows, this.cols);
     placeMines(this.grid, this.config, excludePositions);
-    computeHints(this.grid, this.rows, this.cols, this.config.topology);
+    computeHints(this.grid, this.rows, this.cols, this.config.topology, this.config.gridShape);
 
     this.safeCellCount = 0;
     for (let r = 0; r < this.rows; r++) {
@@ -72,13 +72,7 @@ export class Game {
       result.push({ row: current.row, col: current.col });
 
       if (current.d >= depth) continue;
-      const nbrs = neighboursForTopology(
-        current.row,
-        current.col,
-        this.rows,
-        this.cols,
-        this.config.topology,
-      );
+      const nbrs = this.neighbours(current.row, current.col);
       for (const n of nbrs) {
         const nk = `${n.row},${n.col}`;
         if (!visited.has(nk)) {
@@ -90,8 +84,23 @@ export class Game {
     return result;
   }
 
+  private neighbours(row: number, col: number): Pos[] {
+    return neighboursForGrid(
+      row,
+      col,
+      this.rows,
+      this.cols,
+      this.config.topology,
+      this.config.gridShape,
+    );
+  }
+
   get topology() {
     return this.config.topology;
+  }
+
+  get gridShape() {
+    return this.config.gridShape;
   }
 
   cellView(row: number, col: number): CellView {
@@ -203,7 +212,7 @@ export class Game {
     }
 
     if (cell.hint === 0) {
-      const queue: Pos[] = neighboursForTopology(row, col, this.rows, this.cols, this.config.topology);
+      const queue: Pos[] = this.neighbours(row, col);
       while (queue.length > 0) {
         const p = queue.pop()!;
         const nc = this.grid[p.row][p.col];
@@ -212,7 +221,7 @@ export class Game {
         this.openedCount++;
         opened.push(p);
         if (nc.hint === 0 && nc.mineCount === 0) {
-          queue.push(...neighboursForTopology(p.row, p.col, this.rows, this.cols, this.config.topology));
+          queue.push(...this.neighbours(p.row, p.col));
         }
       }
     }
@@ -260,7 +269,7 @@ export class Game {
     const cell = this.grid[row][col];
     if (!cell.opened) return [];
 
-    const nbrs = neighboursForTopology(row, col, this.rows, this.cols, this.config.topology);
+    const nbrs = this.neighbours(row, col);
     let markerSum = 0;
     for (const n of nbrs) {
       const nc = this.grid[n.row][n.col];
@@ -294,7 +303,7 @@ export class Game {
       this.firstClick = false;
     }
 
-    const targets = [{ row, col }, ...neighboursForTopology(row, col, this.rows, this.cols, this.config.topology)];
+    const targets = [{ row, col }, ...this.neighbours(row, col)];
     for (const pos of targets) {
       const c = this.grid[pos.row][pos.col];
       if (c.opened) continue;
@@ -316,7 +325,7 @@ export class Game {
     this.openedCount++;
 
     if (cell.hint === 0) {
-      const queue: Pos[] = neighboursForTopology(row, col, this.rows, this.cols, this.config.topology);
+      const queue: Pos[] = this.neighbours(row, col);
       while (queue.length > 0) {
         const p = queue.pop()!;
         const nc = this.grid[p.row][p.col];
@@ -324,7 +333,7 @@ export class Game {
         nc.opened = true;
         this.openedCount++;
         if (nc.hint === 0 && nc.mineCount === 0) {
-          queue.push(...neighboursForTopology(p.row, p.col, this.rows, this.cols, this.config.topology));
+          queue.push(...this.neighbours(p.row, p.col));
         }
       }
     }
