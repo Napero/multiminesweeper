@@ -103,6 +103,7 @@ export class App {
   }
 
   async init(): Promise<void> {
+    this.keepBaseUrlConstant();
     try {
       this.sheet = await loadSpritesheet();
     } catch {
@@ -303,6 +304,14 @@ export class App {
     document.getElementById("help-overlay")?.classList.remove("open");
   }
 
+  private keepBaseUrlConstant(): void {
+    const base = import.meta.env.BASE_URL ?? "/";
+    const normalizedBase = base.endsWith("/") ? base : `${base}/`;
+    if (window.location.pathname !== normalizedBase || window.location.search !== "" || window.location.hash !== "") {
+      window.history.replaceState(null, "", normalizedBase);
+    }
+  }
+
   private setInputValue(id: string, value: string): void {
     const el = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null;
     if (el) el.value = value;
@@ -435,6 +444,7 @@ export class App {
     this.hintBtn?.setActive(false);
     this.updateTimerDisplay();
     this.render();
+    this.keepBaseUrlConstant();
   }
 
   giveUp(): void {
