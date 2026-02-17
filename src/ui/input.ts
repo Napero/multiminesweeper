@@ -16,6 +16,7 @@ interface CellPos {
 export class InputHandler {
   private contextMenuHandler = (e: Event) => e.preventDefault();
   private cursorPos: CellPos | null = null;
+  private leftMouseDown = false;
   private onKeyDown = (e: KeyboardEvent) => {
     if (e.code !== "Space") return;
     if (!this.cursorPos) return;
@@ -41,9 +42,11 @@ export class InputHandler {
 
   private attach(): void {
     this.canvas.addEventListener("mousedown", this.onMouse);
+    this.canvas.addEventListener("mouseup", this.onMouseUp);
     this.canvas.addEventListener("contextmenu", this.contextMenuHandler);
     this.canvas.addEventListener("mousemove", this.onMouseMove);
     this.canvas.addEventListener("mouseleave", this.onMouseLeave);
+    window.addEventListener("mouseup", this.onMouseUp);
     window.addEventListener("keydown", this.onKeyDown);
     this.canvas.addEventListener("touchstart", this.onTouchStart, { passive: false });
     this.canvas.addEventListener("touchmove", this.onTouchMove, { passive: false });
@@ -52,9 +55,11 @@ export class InputHandler {
 
   detach(): void {
     this.canvas.removeEventListener("mousedown", this.onMouse);
+    this.canvas.removeEventListener("mouseup", this.onMouseUp);
     this.canvas.removeEventListener("contextmenu", this.contextMenuHandler);
     this.canvas.removeEventListener("mousemove", this.onMouseMove);
     this.canvas.removeEventListener("mouseleave", this.onMouseLeave);
+    window.removeEventListener("mouseup", this.onMouseUp);
     window.removeEventListener("keydown", this.onKeyDown);
     this.canvas.removeEventListener("touchstart", this.onTouchStart);
     this.canvas.removeEventListener("touchmove", this.onTouchMove);
@@ -70,10 +75,25 @@ export class InputHandler {
     if (!pos) return;
 
     switch (e.button) {
-      case 0: this.callbacks.onLeftClick(pos.row, pos.col); break;
+      case 0:
+        this.leftMouseDown = true;
+        break;
       case 1: this.callbacks.onChord(pos.row, pos.col); break;
       case 2: this.callbacks.onCycleMarker(pos.row, pos.col, e.shiftKey); break;
     }
+  };
+
+  private onMouseUp = (e: MouseEvent): void => {
+    if (e.button !== 0) return;
+    if (!this.leftMouseDown) return;
+    this.leftMouseDown = false;
+
+    const rect = this.canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const pos = this.toCell(px, py);
+    if (!pos) return;
+    this.callbacks.onLeftClick(pos.row, pos.col);
   };
 
   private onMouseMove = (e: MouseEvent): void => {

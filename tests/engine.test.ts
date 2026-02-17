@@ -9,6 +9,8 @@ import {
   createEmptyGrid,
   placeMines,
   computeHints,
+  neighboursForTopology,
+  neighboursForGrid,
 } from "../src/engine/index";
 
 // ─── RNG determinism ────────────────────────────────────────────────────────
@@ -48,6 +50,118 @@ describe("neighbours", () => {
   it("returns 5 neighbours for an edge cell", () => {
     expect(neighbours(0, 5, 10, 10)).toHaveLength(5);
   });
+
+  it("torus wraps around both axes", () => {
+    const n = neighboursForTopology(0, 0, 4, 4, "torus");
+    expect(n).toHaveLength(8);
+    expect(n.some((p) => p.row === 3 && p.col === 3)).toBe(true);
+  });
+
+  it("cylinder wraps horizontally only", () => {
+    const n = neighboursForTopology(0, 0, 4, 4, "cylinder");
+    expect(n.some((p) => p.row === 0 && p.col === 3)).toBe(true);
+    expect(n.some((p) => p.row === 3 && p.col === 0)).toBe(false);
+  });
+
+  it("hex grid has 6 neighbors for an interior cell", () => {
+    const n = neighboursForGrid(2, 2, 6, 6, "plane", "hex");
+    expect(n).toHaveLength(6);
+  });
+
+  it("hex grid corner cell has 2-3 neighbors", () => {
+    const n = neighboursForGrid(0, 0, 6, 6, "plane", "hex");
+    expect(n.length).toBeGreaterThanOrEqual(2);
+    expect(n.length).toBeLessThanOrEqual(3);
+  });
+
+  it("hex grid edge cell has fewer than 6 neighbors", () => {
+    const n = neighboursForGrid(0, 3, 6, 6, "plane", "hex");
+    expect(n.length).toBeLessThan(6);
+    expect(n.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("hex neighbors are all unique", () => {
+    const n = neighboursForGrid(3, 3, 8, 8, "plane", "hex");
+    const keys = n.map((p) => `${p.row},${p.col}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("hex neighbors never include the cell itself", () => {
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 6; c++) {
+        const n = neighboursForGrid(r, c, 6, 6, "plane", "hex");
+        expect(n.some((p) => p.row === r && p.col === c)).toBe(false);
+      }
+    }
+  });
+
+  it("hex even row vs odd row have correct stagger", () => {
+    // Even row (row 2): neighbors at dr=-1 should include dc=-1 and dc=0
+    const evenN = neighboursForGrid(2, 2, 6, 6, "plane", "hex");
+    expect(evenN.some((p) => p.row === 1 && p.col === 1)).toBe(true);
+    expect(evenN.some((p) => p.row === 1 && p.col === 2)).toBe(true);
+    // Odd row (row 3): neighbors at dr=-1 should include dc=0 and dc=1
+    const oddN = neighboursForGrid(3, 2, 6, 6, "plane", "hex");
+    expect(oddN.some((p) => p.row === 2 && p.col === 2)).toBe(true);
+    expect(oddN.some((p) => p.row === 2 && p.col === 3)).toBe(true);
+  });
+
+  it("triangle grid has 3 neighbors for an interior cell", () => {
+    const n = neighboursForGrid(2, 2, 6, 6, "plane", "triangle");
+    expect(n).toHaveLength(3);
+  });
+
+  it("triangle up vs down have correct neighbors", () => {
+    // (2,2): (row+col)%2==0 → points up → neighbors: left, right, below
+    const up = neighboursForGrid(2, 2, 6, 6, "plane", "triangle");
+    expect(up).toHaveLength(3);
+    expect(up.some((p) => p.row === 2 && p.col === 1)).toBe(true); // left
+    expect(up.some((p) => p.row === 2 && p.col === 3)).toBe(true); // right
+    expect(up.some((p) => p.row === 3 && p.col === 2)).toBe(true); // below
+    // (2,3): (row+col)%2==1 → points down → neighbors: left, right, above
+    const down = neighboursForGrid(2, 3, 6, 6, "plane", "triangle");
+    expect(down).toHaveLength(3);
+    expect(down.some((p) => p.row === 2 && p.col === 2)).toBe(true); // left
+    expect(down.some((p) => p.row === 2 && p.col === 4)).toBe(true); // right
+    expect(down.some((p) => p.row === 1 && p.col === 3)).toBe(true); // above
+  });
+
+  it("triangle corner has fewer than 3 neighbors", () => {
+    const n = neighboursForGrid(0, 0, 6, 6, "plane", "triangle");
+    expect(n.length).toBeLessThanOrEqual(2);
+  });
+
+  it("triangle neighbors never include the cell itself", () => {
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 6; c++) {
+        const n = neighboursForGrid(r, c, 6, 6, "plane", "triangle");
+        expect(n.some((p) => p.row === r && p.col === c)).toBe(false);
+      }
+    }
+  });
+
+  it("hex + torus wraps correctly", () => {
+    const n = neighboursForGrid(0, 0, 6, 6, "torus", "hex");
+    // Should have 6 neighbors, some wrapping around
+    expect(n).toHaveLength(6);
+    // All neighbors should be in bounds
+    for (const p of n) {
+      expect(p.row).toBeGreaterThanOrEqual(0);
+      expect(p.row).toBeLessThan(6);
+      expect(p.col).toBeGreaterThanOrEqual(0);
+      expect(p.col).toBeLessThan(6);
+    }
+  });
+
+  it("hex + cylinder wraps columns only", () => {
+    const n = neighboursForGrid(0, 0, 6, 6, "cylinder", "hex");
+    // Should wrap on columns but not rows, so fewer than 6 at top edge
+    for (const p of n) {
+      expect(p.row).toBeGreaterThanOrEqual(0);
+      expect(p.col).toBeGreaterThanOrEqual(0);
+      expect(p.col).toBeLessThan(6);
+    }
+  });
 });
 
 // ─── Mine placement ─────────────────────────────────────────────────────────
@@ -63,6 +177,8 @@ describe("placeMines", () => {
       safeFirstClick: false,
       density: 0.5,
       negativeMines: false,
+      topology: "plane" as const,
+      gridShape: "square" as const,
     };
     const grid = createEmptyGrid(10, 10);
     placeMines(grid, config);
@@ -81,6 +197,8 @@ describe("placeMines", () => {
       safeFirstClick: false,
       density: 1,
       negativeMines: false,
+      topology: "plane" as const,
+      gridShape: "square" as const,
     };
     const grid = createEmptyGrid(5, 5);
     placeMines(grid, config);
@@ -101,6 +219,8 @@ describe("placeMines", () => {
       safeFirstClick: false,
       density: 1,
       negativeMines: false,
+      topology: "plane" as const,
+      gridShape: "square" as const,
     };
     const exclude = [{ row: 2, col: 2 }, { row: 2, col: 3 }];
     const grid = createEmptyGrid(5, 5);
@@ -119,6 +239,8 @@ describe("placeMines", () => {
       safeFirstClick: false,
       density: 0.5,
       negativeMines: false,
+      topology: "plane" as const,
+      gridShape: "square" as const,
     };
     const g1 = createEmptyGrid(8, 8);
     placeMines(g1, config);
@@ -219,6 +341,7 @@ describe("Game - open & flood fill", () => {
     expect(game.status).not.toBe(GameStatus.Lost);
     expect(game.grid[2][2].mineCount).toBe(0);
   });
+
 });
 
 // ─── Game: cycleMarker ──────────────────────────────────────────────────────
@@ -344,6 +467,185 @@ describe("Game - win detection", () => {
     // Open all non-mine cells
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 5; c++) {
+        if (game.grid[r][c].mineCount === 0) {
+          game.open(r, c);
+        }
+      }
+    }
+    expect(game.status).toBe(GameStatus.Won);
+  });
+});
+
+// ─── Hex grid: mine placement & hints ───────────────────────────────────────
+
+describe("Hex grid - placement & hints", () => {
+  const hexConfig = {
+    rows: 8,
+    cols: 8,
+    minesTotal: 15,
+    maxMinesPerCell: 3,
+    seed: 42,
+    safeFirstClick: false,
+    density: 0.5,
+    negativeMines: false,
+    topology: "plane" as const,
+    gridShape: "hex" as const,
+  };
+
+  it("places correct total mines on hex grid", () => {
+    const grid = createEmptyGrid(8, 8);
+    placeMines(grid, hexConfig);
+    let total = 0;
+    for (const row of grid) for (const cell of row) total += cell.mineCount;
+    expect(total).toBe(15);
+  });
+
+  it("computes hex hints using 6 neighbors", () => {
+    const grid = createEmptyGrid(5, 5);
+    // Place mines around (2,2) in hex neighbor positions
+    grid[2][1].mineCount = 1;
+    grid[2][3].mineCount = 2;
+    computeHints(grid, 5, 5, "plane", "hex");
+    // (2,2) is even row, so neighbors: (2,1),(2,3),(1,1),(1,2),(3,1),(3,2)
+    const expected = grid[2][1].mineCount + grid[2][3].mineCount +
+      grid[1][1].mineCount + grid[1][2].mineCount +
+      grid[3][1].mineCount + grid[3][2].mineCount;
+    expect(grid[2][2].hint).toBe(expected);
+  });
+});
+
+// ─── Triangle grid: mine placement & hints ──────────────────────────────────
+
+describe("Triangle grid - placement & hints", () => {
+  const triConfig = {
+    rows: 8,
+    cols: 10,
+    minesTotal: 20,
+    maxMinesPerCell: 3,
+    seed: 42,
+    safeFirstClick: false,
+    density: 0.5,
+    negativeMines: false,
+    topology: "plane" as const,
+    gridShape: "triangle" as const,
+  };
+
+  it("places correct total mines on triangle grid", () => {
+    const grid = createEmptyGrid(8, 10);
+    placeMines(grid, triConfig);
+    let total = 0;
+    for (const row of grid) for (const cell of row) total += cell.mineCount;
+    expect(total).toBe(20);
+  });
+
+  it("computes triangle hints using 3 neighbors", () => {
+    const grid = createEmptyGrid(5, 5);
+    // (2,2) points up → neighbors: (2,1), (2,3), (3,2)
+    grid[2][1].mineCount = 1;
+    grid[2][3].mineCount = 2;
+    grid[3][2].mineCount = 3;
+    computeHints(grid, 5, 5, "plane", "triangle");
+    expect(grid[2][2].hint).toBe(6); // 1+2+3
+  });
+});
+
+// ─── Hex game play ──────────────────────────────────────────────────────────
+
+describe("Game - hex grid play", () => {
+  it("safe first click works on hex grid", () => {
+    const game = new Game({
+      rows: 8,
+      cols: 8,
+      minesTotal: 30,
+      maxMinesPerCell: 6,
+      seed: 42,
+      safeFirstClick: true,
+      gridShape: "hex",
+    });
+    game.open(4, 4);
+    expect(game.status).not.toBe(GameStatus.Lost);
+    expect(game.grid[4][4].mineCount).toBe(0);
+  });
+
+  it("flood fill works on hex grid", () => {
+    const game = new Game({
+      rows: 8,
+      cols: 8,
+      minesTotal: 1,
+      maxMinesPerCell: 1,
+      seed: 42,
+      safeFirstClick: true,
+      gridShape: "hex",
+    });
+    const opened = game.open(4, 4);
+    expect(opened.length).toBeGreaterThan(1);
+  });
+
+  it("wins hex game when all safe cells opened", () => {
+    const game = new Game({
+      rows: 5,
+      cols: 5,
+      minesTotal: 3,
+      maxMinesPerCell: 1,
+      seed: 42,
+      safeFirstClick: false,
+      gridShape: "hex",
+    });
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 5; c++) {
+        if (game.grid[r][c].mineCount === 0) {
+          game.open(r, c);
+        }
+      }
+    }
+    expect(game.status).toBe(GameStatus.Won);
+  });
+});
+
+// ─── Triangle game play ─────────────────────────────────────────────────────
+
+describe("Game - triangle grid play", () => {
+  it("safe first click works on triangle grid", () => {
+    const game = new Game({
+      rows: 8,
+      cols: 10,
+      minesTotal: 30,
+      maxMinesPerCell: 6,
+      seed: 42,
+      safeFirstClick: true,
+      gridShape: "triangle",
+    });
+    game.open(4, 5);
+    expect(game.status).not.toBe(GameStatus.Lost);
+    expect(game.grid[4][5].mineCount).toBe(0);
+  });
+
+  it("flood fill works on triangle grid", () => {
+    const game = new Game({
+      rows: 8,
+      cols: 10,
+      minesTotal: 1,
+      maxMinesPerCell: 1,
+      seed: 42,
+      safeFirstClick: true,
+      gridShape: "triangle",
+    });
+    const opened = game.open(4, 5);
+    expect(opened.length).toBeGreaterThan(1);
+  });
+
+  it("wins triangle game when all safe cells opened", () => {
+    const game = new Game({
+      rows: 5,
+      cols: 6,
+      minesTotal: 3,
+      maxMinesPerCell: 1,
+      seed: 42,
+      safeFirstClick: false,
+      gridShape: "triangle",
+    });
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 6; c++) {
         if (game.grid[r][c].mineCount === 0) {
           game.open(r, c);
         }

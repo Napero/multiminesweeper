@@ -1,11 +1,11 @@
-import { Game, GameConfig, DEFAULT_CONFIG, GameStatus } from "../engine/index";
+import { Game, GameConfig, GameStatus, GridShape, TopologyMode } from "../engine/index";
 import { Renderer } from "./renderer";
 import { InputHandler } from "./input";
 import { loadSpritesheet } from "../sprites";
-import { CELL_SIZE, CELL_HEIGHT, SPRITE_FLAG, SPRITE_BOMB, SpriteRect } from "../sprites";
+import { CELL_SIZE, CELL_HEIGHT, SPRITE_BOMB, SpriteRect } from "../sprites";
 import { Smiley, SmileyState } from "./smiley";
 import { ToolbarButton } from "./toolbar-button";
-import { drawFlag, drawBomb } from "./fallback";
+import { drawBomb } from "./fallback";
 
 const PRESETS: Record<string, Partial<GameConfig>> = {
   beginner:     { rows: 9,  cols: 9,  minesTotal: 30,  maxMinesPerCell: 4, density: 0.7 },
@@ -13,7 +13,14 @@ const PRESETS: Record<string, Partial<GameConfig>> = {
   hard:         { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6 },
   expert:       { rows: 16, cols: 30, minesTotal: 250, maxMinesPerCell: 6, density: 0.6 },
   nightmare:    { rows: 20, cols: 35, minesTotal: 450, maxMinesPerCell: 6, density: 0.45 },
+  "intermediate-negative": { rows: 16, cols: 16, minesTotal: 60, maxMinesPerCell: 5, density: 0.6, negativeMines: true },
   "hard-negative": { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, negativeMines: true },
+  cylinder: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "cylinder" },
+  torus: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "torus" },
+  mobius: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "mobius" },
+  klein: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "klein" },
+  hex: { rows: 14, cols: 20, minesTotal: 130, maxMinesPerCell: 6, density: 0.6, gridShape: "hex" },
+  triangle: { rows: 12, cols: 30, minesTotal: 150, maxMinesPerCell: 6, density: 0.6, gridShape: "triangle" },
 };
 
 export function readConfigFromModal(): Partial<GameConfig> {
@@ -28,15 +35,24 @@ export function readConfigFromModal(): Partial<GameConfig> {
   const density = val("opt-density", 60) / 100;
   const negEl = document.getElementById("opt-negative") as HTMLInputElement | null;
   const negativeMines = negEl?.checked ?? false;
+  const topologyEl = document.getElementById("opt-topology") as HTMLSelectElement | null;
+  const topology = (topologyEl?.value ?? "plane") as TopologyMode;
+  const shapeEl = document.getElementById("opt-shape") as HTMLSelectElement | null;
+  const gridShape = (shapeEl?.value ?? "square") as GridShape;
+  const rows = val("opt-rows", 16);
+  const cols = val("opt-cols", 30);
 
   return {
-    rows: val("opt-rows", 16),
-    cols: val("opt-cols", 30),
+    rows,
+    cols,
     minesTotal: val("opt-mines", 99),
     maxMinesPerCell: val("opt-max", 6),
     seed,
     density,
     negativeMines,
+    topology,
+    gridShape,
+    safeFirstClick: true,
   };
 }
 
@@ -64,6 +80,15 @@ export class App {
   private hintPending = false;
   private hintHoverPos: { row: number; col: number } | null = null;
   private hintCount = 0;
+  private boardLeftHeld = false;
+  private pressedCellPreview: { row: number; col: number } | null = null;
+  private helpCloseClickHandler = () => this.closeHelp();
+  private helpOverlayClickHandler = (ev: MouseEvent) => {
+    const overlay = document.getElementById("help-overlay");
+    if (overlay && ev.target === overlay) this.closeHelp();
+  };
+  private breakdownInvertCanvas = document.createElement("canvas");
+  private breakdownInvertCtx = this.breakdownInvertCanvas.getContext("2d")!;
 
   constructor(canvas: HTMLCanvasElement, config: Partial<GameConfig> = {}) {
     this.canvas = canvas;
@@ -145,6 +170,8 @@ export class App {
       this.closeCustomModal();
       this.newGame(cfg);
     });
+    document.getElementById("help-close")?.addEventListener("click", this.helpCloseClickHandler);
+    document.getElementById("help-overlay")?.addEventListener("click", this.helpOverlayClickHandler);
 
     // Density slider label sync
     const densitySlider = document.getElementById("opt-density") as HTMLInputElement | null;
@@ -165,8 +192,9 @@ export class App {
         return;
       }
       const rect = this.canvas.getBoundingClientRect();
-      const pos = this.renderer.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
-      if (!pos) return;
+      const local = this.renderer.pixelToCell(e.clientX - rect.left, e.clientY - rect.top);
+      if (!local) return;
+      const pos = local;
       if (!this.hintHoverPos || this.hintHoverPos.row !== pos.row || this.hintHoverPos.col !== pos.col) {
         this.hintHoverPos = pos;
         this.render();
@@ -178,6 +206,51 @@ export class App {
         this.render();
       }
     });
+    this.canvas.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      this.boardLeftHeld = true;
+      if (this.game.status === GameStatus.Playing) {
+        this.smiley?.draw(SmileyState.Surprised);
+      }
+      this.updatePressedCellPreviewFromPixels(e.clientX, e.clientY);
+    });
+    this.canvas.addEventListener("mousemove", (e) => {
+      if (!this.boardLeftHeld) return;
+      this.updatePressedCellPreviewFromPixels(e.clientX, e.clientY);
+    });
+    window.addEventListener("mouseup", (e) => {
+      if (e.button !== 0) return;
+      this.boardLeftHeld = false;
+      const hadPressedPreview = this.pressedCellPreview !== null;
+      this.pressedCellPreview = null;
+      this.updateSmiley();
+      if (hadPressedPreview) this.render();
+    });
+    this.canvas.addEventListener("mouseleave", () => {
+      if (this.boardLeftHeld) {
+        const hadPressedPreview = this.pressedCellPreview !== null;
+        this.pressedCellPreview = null;
+        if (hadPressedPreview) this.render();
+      } else {
+        this.updateSmiley();
+      }
+    });
+    this.canvas.addEventListener("touchstart", () => {
+      this.boardLeftHeld = true;
+      if (this.game.status === GameStatus.Playing) {
+        this.smiley?.draw(SmileyState.Surprised);
+      }
+    }, { passive: true });
+    this.canvas.addEventListener("touchend", () => {
+      this.boardLeftHeld = false;
+      this.pressedCellPreview = null;
+      this.updateSmiley();
+    }, { passive: true });
+    this.canvas.addEventListener("touchcancel", () => {
+      this.boardLeftHeld = false;
+      this.pressedCellPreview = null;
+      this.updateSmiley();
+    }, { passive: true });
 
     this.newGame();
     // Global keyboard: ? opens help, Esc closes
@@ -216,16 +289,6 @@ export class App {
 
   private openHelp(): void {
     document.getElementById("help-overlay")?.classList.add("open");
-    // close button
-    const btn = document.getElementById("help-close");
-    if (btn) btn.addEventListener("click", () => this.closeHelp());
-    // click outside to close
-    const overlay = document.getElementById("help-overlay");
-    if (overlay) {
-      overlay.addEventListener("click", (ev) => {
-        if (ev.target === overlay) this.closeHelp();
-      });
-    }
   }
 
   private closeHelp(): void {
@@ -240,13 +303,16 @@ export class App {
     if (this.input) this.input.detach();
 
     this.game = new Game(this.config);
+
     const scale = this.computeScale();
     this.renderer = new Renderer(this.canvas, this.sheet, scale);
-    this.renderer.resize(this.game.rows, this.game.cols);
+    this.renderer.resize(this.game.rows, this.game.cols, this.game.gridShape);
 
     this.input = new InputHandler(
       this.canvas,
-      (px, py) => this.renderer.pixelToCell(px, py),
+      (px, py) => {
+        return this.renderer.pixelToCell(px, py);
+      },
       {
         onLeftClick: (r, c) => {
           this.startTimer();
@@ -314,6 +380,7 @@ export class App {
     this.hintPending = false;
     this.hintHoverPos = null;
     this.hintCount = 0;
+    this.pressedCellPreview = null;
     this.hintBtn?.setActive(false);
     this.updateTimerDisplay();
     this.render();
@@ -367,8 +434,21 @@ export class App {
     const maxW = (container?.parentElement?.clientWidth ?? window.innerWidth) - 24;
     const maxH = window.innerHeight - padding - 80;
 
-    const boardW = this.game.cols * CELL_SIZE;
-    const boardH = this.game.rows * CELL_HEIGHT;
+    const rows = this.game.rows;
+    const cols = this.game.cols;
+    let boardW = cols * CELL_SIZE;
+    let boardH = rows * CELL_HEIGHT;
+
+    const shape = this.game.gridShape;
+    if (shape === "hex") {
+      const hexH = CELL_SIZE * 2 / Math.sqrt(3);
+      boardW = cols * CELL_SIZE + CELL_SIZE * 0.5;
+      boardH = (rows - 1) * hexH * 0.75 + hexH;
+    } else if (shape === "triangle") {
+      const triH = CELL_SIZE * Math.sqrt(3) / 2;
+      boardW = cols * CELL_SIZE * 0.5 + CELL_SIZE * 0.5;
+      boardH = rows * triH;
+    }
 
     const scaleX = maxW / boardW;
     const scaleY = maxH / boardH;
@@ -380,16 +460,17 @@ export class App {
     if (!this.game) return;
     const scale = this.computeScale();
     this.renderer.scale = scale;
-    this.renderer.resize(this.game.rows, this.game.cols);
+    this.renderer.resize(this.game.rows, this.game.cols, this.game.gridShape);
     this.render();
   }
 
   private render(): void {
-    this.renderer.renderBoard(this.game);
+    this.renderer.renderBoard(this.game, this.pressedCellPreview);
     if (this.hintPending && this.hintHoverPos && this.game.status === GameStatus.Playing) {
       this.renderer.renderHintOverlay(
         this.hintHoverPos.row, this.hintHoverPos.col,
         this.game.rows, this.game.cols,
+        this.game.topology,
       );
     }
     this.updateSmiley();
@@ -398,6 +479,10 @@ export class App {
 
   private updateSmiley(): void {
     if (!this.smiley) return;
+    if (this.boardLeftHeld && this.game.status === GameStatus.Playing) {
+      this.smiley.draw(SmileyState.Surprised);
+      return;
+    }
     if (this.game.status === GameStatus.Won) {
       this.smiley.draw(SmileyState.Cool);
     } else if (this.game.status === GameStatus.Lost) {
@@ -416,7 +501,8 @@ export class App {
     } else if (status === GameStatus.Won) {
       bar.textContent = "Congratulations, you win!";
     } else {
-      bar.textContent = `Mines remaining: ${this.game.remainingMines}`;
+      const topologySuffix = this.game.topology === "plane" ? "" : ` · Topology: ${this.game.topology}`;
+      bar.textContent = `Mines remaining: ${this.game.remainingMines}${topologySuffix}`;
     }
     this.renderBreakdown();
   }
@@ -484,10 +570,10 @@ export class App {
     sprite: SpriteRect,
     dx: number, dy: number, dw: number, dh: number,
   ): void {
-    const tmp = document.createElement("canvas");
+    const tmp = this.breakdownInvertCanvas;
+    const tc = this.breakdownInvertCtx;
     tmp.width = sprite.w;
     tmp.height = sprite.h;
-    const tc = tmp.getContext("2d")!;
     tc.drawImage(sheet, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, sprite.w, sprite.h);
     tc.globalCompositeOperation = "difference";
     tc.fillStyle = "#ffffff";
@@ -497,5 +583,37 @@ export class App {
     tc.drawImage(sheet, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, sprite.w, sprite.h);
     tc.globalCompositeOperation = "source-over";
     ctx.drawImage(tmp, 0, 0, sprite.w, sprite.h, dx, dy, dw, dh);
+  }
+
+  private updatePressedCellPreviewFromPixels(clientX: number, clientY: number): void {
+    if (this.game.status !== GameStatus.Playing) {
+      if (this.pressedCellPreview) {
+        this.pressedCellPreview = null;
+        this.render();
+      }
+      return;
+    }
+
+    const rect = this.canvas.getBoundingClientRect();
+    const local = this.renderer.pixelToCell(clientX - rect.left, clientY - rect.top);
+    const pos = local;
+    let next: { row: number; col: number } | null = null;
+    if (pos) {
+      const cell = this.game.cell(pos.row, pos.col);
+      if (!cell.opened && cell.markerCount === 0) {
+        next = pos;
+      }
+    }
+
+    const changed =
+      (this.pressedCellPreview === null) !== (next === null) ||
+      (this.pressedCellPreview !== null &&
+        next !== null &&
+        (this.pressedCellPreview.row !== next.row || this.pressedCellPreview.col !== next.col));
+
+    if (changed) {
+      this.pressedCellPreview = next;
+      this.render();
+    }
   }
 }
