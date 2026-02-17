@@ -177,18 +177,29 @@ function pentagonMoveFlower(row: number, flowerCol: number, dir: number): { row:
   }
 }
 
-function pentagonNeighbourDeltas(row: number, col: number): Array<{ dr: number; dc: number }> {
+function pentagonNeighbourDeltas(
+  row: number,
+  col: number,
+  includeVertexNeighbors: boolean,
+): Array<{ dr: number; dc: number }> {
   const flowerCol = Math.floor(col / PENTAGON_PETALS);
   const petal = ((col % PENTAGON_PETALS) + PENTAGON_PETALS) % PENTAGON_PETALS;
   const baseCol = flowerCol * PENTAGON_PETALS;
   const deltas: Array<{ dr: number; dc: number }> = [];
 
-  // In this pentagonal tiling, the 6 petals in a flower share the hub vertex.
-  // Minesweeper adjacency counts vertex-touching cells, so all other petals
-  // in the same flower are neighbors (not just edge-adjacent ones).
-  for (let p = 0; p < PENTAGON_PETALS; p++) {
-    if (p === petal) continue;
-    deltas.push({ dr: 0, dc: baseCol + p - col });
+  if (includeVertexNeighbors) {
+    // In this pentagonal tiling, the 6 petals in a flower share the hub vertex.
+    // Minesweeper adjacency counts vertex-touching cells, so all other petals
+    // in the same flower are neighbors (not just edge-adjacent ones).
+    for (let p = 0; p < PENTAGON_PETALS; p++) {
+      if (p === petal) continue;
+      deltas.push({ dr: 0, dc: baseCol + p - col });
+    }
+  } else {
+    const prev = (petal + PENTAGON_PETALS - 1) % PENTAGON_PETALS;
+    const next = (petal + 1) % PENTAGON_PETALS;
+    deltas.push({ dr: 0, dc: baseCol + prev - col });
+    deltas.push({ dr: 0, dc: baseCol + next - col });
   }
 
   for (const link of PENTAGON_EXTERNAL_BY_PETAL[petal]) {
@@ -200,16 +211,25 @@ function pentagonNeighbourDeltas(row: number, col: number): Array<{ dr: number; 
   return deltas;
 }
 
-function shapeNeighbourDeltas(row: number, col: number, shape: GridShape): Array<{ dr: number; dc: number }> {
+function shapeNeighbourDeltas(
+  row: number,
+  col: number,
+  shape: GridShape,
+  includeVertexNeighbors: boolean,
+): Array<{ dr: number; dc: number }> {
   if (shape === "square") {
-    const deltas: Array<{ dr: number; dc: number }> = [];
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
-        if (dr === 0 && dc === 0) continue;
-        deltas.push({ dr, dc });
-      }
-    }
-    return deltas;
+    return includeVertexNeighbors
+      ? [
+          { dr: -1, dc: -1 }, { dr: -1, dc: 0 }, { dr: -1, dc: 1 },
+          { dr: 0, dc: -1 },                    { dr: 0, dc: 1 },
+          { dr: 1, dc: -1 },  { dr: 1, dc: 0 },  { dr: 1, dc: 1 },
+        ]
+      : [
+          { dr: -1, dc: 0 },
+          { dr: 0, dc: -1 },
+          { dr: 0, dc: 1 },
+          { dr: 1, dc: 0 },
+        ];
   }
 
   if (shape === "hex") {
@@ -236,7 +256,7 @@ function shapeNeighbourDeltas(row: number, col: number, shape: GridShape): Array
   }
 
   if (shape === "pentagon") {
-    return pentagonNeighbourDeltas(row, col);
+    return pentagonNeighbourDeltas(row, col, includeVertexNeighbors);
   }
 
   if (shape === "irregular" || shape === "random") {
@@ -251,16 +271,49 @@ function shapeNeighbourDeltas(row: number, col: number, shape: GridShape): Array
   }
 
   const pointsUp = (row + col) % 2 === 0;
+  if (!includeVertexNeighbors) {
+    return pointsUp
+      ? [
+          { dr: 0, dc: -1 },
+          { dr: 0, dc: 1 },
+          { dr: 1, dc: 0 },
+        ]
+      : [
+          { dr: 0, dc: -1 },
+          { dr: 0, dc: 1 },
+          { dr: -1, dc: 0 },
+        ];
+  }
+  // Triangular tiling with vertex-touch adjacency:
+  // interior cells have 12 neighbors (edge + vertex touching).
   return pointsUp
     ? [
+        { dr: -1, dc: -1 },
+        { dr: -1, dc: 0 },
+        { dr: -1, dc: 1 },
+        { dr: 0, dc: -2 },
         { dr: 0, dc: -1 },
         { dr: 0, dc: 1 },
+        { dr: 0, dc: 2 },
+        { dr: 1, dc: -2 },
+        { dr: 1, dc: -1 },
         { dr: 1, dc: 0 },
+        { dr: 1, dc: 1 },
+        { dr: 1, dc: 2 },
       ]
     : [
+        { dr: -1, dc: -2 },
+        { dr: -1, dc: -1 },
+        { dr: -1, dc: 0 },
+        { dr: -1, dc: 1 },
+        { dr: -1, dc: 2 },
+        { dr: 0, dc: -2 },
         { dr: 0, dc: -1 },
         { dr: 0, dc: 1 },
-        { dr: -1, dc: 0 },
+        { dr: 0, dc: 2 },
+        { dr: 1, dc: -1 },
+        { dr: 1, dc: 0 },
+        { dr: 1, dc: 1 },
       ];
 }
 
@@ -272,6 +325,7 @@ export function neighboursForGrid(
   topology: TopologyMode,
   shape: GridShape,
   seed = 0,
+  includeVertexNeighbors = true,
 ): Pos[] {
   if (shape === "irregular" || shape === "random") {
     if (row < 0 || row >= rows || col < 0 || col >= cols) return [];
@@ -280,13 +334,13 @@ export function neighboursForGrid(
         ? buildRandomLayout(rows, cols, seed)
         : buildIrregularLayout(rows, cols, seed);
     const idx = row * cols + col;
-    const ns = layout.neighbours[idx] ?? [];
+    const ns = (includeVertexNeighbors ? layout.neighboursAll : layout.neighboursEdge)[idx] ?? [];
     return ns.map((n) => ({ row: Math.floor(n / cols), col: n % cols }));
   }
 
   const result: Pos[] = [];
   const seen = new Set<string>();
-  for (const { dr, dc } of shapeNeighbourDeltas(row, col, shape)) {
+  for (const { dr, dc } of shapeNeighbourDeltas(row, col, shape, includeVertexNeighbors)) {
     const normalized = normalizeForTopology(row + dr, col + dc, rows, cols, topology);
     if (!normalized) continue;
     const key = posKey(normalized);
@@ -443,12 +497,13 @@ export function computeHints(
   topology: TopologyMode = "plane",
   shape: GridShape = "square",
   seed = 0,
+  includeVertexNeighbors = true,
 ): void {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       let sum = 0;
       let hasAdj = false;
-      for (const n of neighboursForGrid(r, c, rows, cols, topology, shape, seed)) {
+      for (const n of neighboursForGrid(r, c, rows, cols, topology, shape, seed, includeVertexNeighbors)) {
         const mc = grid[n.row][n.col].mineCount;
         sum += mc;
         if (mc !== 0) hasAdj = true;

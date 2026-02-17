@@ -52,6 +52,8 @@ function readConfigFromModal(): { config: Partial<GameConfig>; hasSeed: boolean 
   const topology = (topologyEl?.value ?? "plane") as TopologyMode;
   const shapeEl = document.getElementById("opt-shape") as HTMLSelectElement | null;
   const gridShape = (shapeEl?.value ?? "square") as GridShape;
+  const vertexEl = document.getElementById("opt-vertex-neighbors") as HTMLInputElement | null;
+  const includeVertexNeighbors = vertexEl?.checked ?? true;
   const rows = val("opt-rows", 16);
   const cols = val("opt-cols", 30);
 
@@ -64,6 +66,7 @@ function readConfigFromModal(): { config: Partial<GameConfig>; hasSeed: boolean 
     negativeMines,
     topology,
     gridShape,
+    includeVertexNeighbors,
     safeFirstClick: true,
   };
   if (seedStr !== "") config.seed = parseSeedInput(seedStr);
@@ -179,7 +182,10 @@ export class App {
         if (preset === "custom") {
           this.openCustomModal();
         } else if (PRESETS[preset]) {
-          this.newGame({ ...PRESETS[preset], seed: Date.now() }, { lockSeed: false });
+          this.newGame(
+            { ...PRESETS[preset], seed: Date.now(), includeVertexNeighbors: true },
+            { lockSeed: false },
+          );
         }
       });
     });
@@ -335,7 +341,7 @@ export class App {
     // Named preset: #preset=hex
     const presetName = params.get("preset");
     if (presetName && PRESETS[presetName]) {
-      const cfg: Partial<GameConfig> = { ...PRESETS[presetName] };
+      const cfg: Partial<GameConfig> = { ...PRESETS[presetName], includeVertexNeighbors: true };
       const seed = params.get("seed");
       if (seed) {
         cfg.seed = parseSeedInput(seed);
@@ -355,6 +361,7 @@ export class App {
     if (params.has("shape")) cfg.gridShape = params.get("shape") as GridShape;
     if (params.has("topology")) cfg.topology = params.get("topology") as TopologyMode;
     if (params.has("negative")) cfg.negativeMines = params.get("negative") === "1";
+    if (params.has("vertex")) cfg.includeVertexNeighbors = params.get("vertex") !== "0";
     if (params.has("seed")) {
       cfg.seed = parseSeedInput(params.get("seed")!);
       this.seedLocked = true;
@@ -383,7 +390,8 @@ export class App {
         cfg.density === merged.density &&
         cfg.gridShape === merged.gridShape &&
         cfg.topology === merged.topology &&
-        cfg.negativeMines === merged.negativeMines
+        cfg.negativeMines === merged.negativeMines &&
+        cfg.includeVertexNeighbors === (merged.includeVertexNeighbors ?? true)
       ) {
         params.set("preset", name);
         if (this.seedLocked) params.set("seed", String(cfg.seed));
@@ -401,6 +409,7 @@ export class App {
     if (cfg.gridShape !== "square") params.set("shape", cfg.gridShape);
     if (cfg.topology !== "plane") params.set("topology", cfg.topology);
     if (cfg.negativeMines) params.set("negative", "1");
+    if (cfg.includeVertexNeighbors === false) params.set("vertex", "0");
     if (this.seedLocked) params.set("seed", String(cfg.seed));
     window.history.replaceState(null, "", `#${params.toString()}`);
   }
@@ -430,6 +439,8 @@ export class App {
     this.setInputValue("opt-density", String(Math.round(cfg.density * 100)));
     this.setInputValue("opt-topology", cfg.topology);
     this.setInputValue("opt-shape", cfg.gridShape);
+    const vertexEl = document.getElementById("opt-vertex-neighbors") as HTMLInputElement | null;
+    if (vertexEl) vertexEl.checked = cfg.includeVertexNeighbors !== false;
 
     const negEl = document.getElementById("opt-negative") as HTMLInputElement | null;
     if (negEl) negEl.checked = !!cfg.negativeMines;
@@ -617,6 +628,7 @@ export class App {
         this.game.rows, this.game.cols,
         this.game.topology,
         this.game.config.seed,
+        this.game.config.includeVertexNeighbors,
       );
     }
     this.updateSmiley();

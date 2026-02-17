@@ -20,6 +20,7 @@ export interface GameConfig {
   negativeMines: boolean;  // allow cells with negative mine counts
   topology: TopologyMode;
   gridShape: GridShape;
+  includeVertexNeighbors?: boolean;
 }
 
 export interface Cell {
@@ -66,4 +67,5 @@ export const DEFAULT_CONFIG: GameConfig = {
   negativeMines: false,
   topology: "plane",
   gridShape: "square",
+  includeVertexNeighbors: true,
 };

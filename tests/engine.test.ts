@@ -106,29 +106,42 @@ describe("neighbours", () => {
     expect(oddN.some((p) => p.row === 2 && p.col === 3)).toBe(true);
   });
 
-  it("triangle grid has 3 neighbors for an interior cell", () => {
+  it("triangle grid has 12 neighbors for an interior cell (edge + vertex touching)", () => {
     const n = neighboursForGrid(2, 2, 6, 6, "plane", "triangle");
-    expect(n).toHaveLength(3);
+    expect(n).toHaveLength(12);
   });
 
-  it("triangle up vs down have correct neighbors", () => {
-    // (2,2): (row+col)%2==0 → points up → neighbors: left, right, below
+  it("triangle up vs down have correct neighbor sets", () => {
+    // (2,2): (row+col)%2==0 → points up
     const up = neighboursForGrid(2, 2, 6, 6, "plane", "triangle");
-    expect(up).toHaveLength(3);
+    expect(up).toHaveLength(12);
     expect(up.some((p) => p.row === 2 && p.col === 1)).toBe(true); // left
     expect(up.some((p) => p.row === 2 && p.col === 3)).toBe(true); // right
     expect(up.some((p) => p.row === 3 && p.col === 2)).toBe(true); // below
-    // (2,3): (row+col)%2==1 → points down → neighbors: left, right, above
+    expect(up.some((p) => p.row === 1 && p.col === 2)).toBe(true); // above by vertex
+    // (2,3): (row+col)%2==1 → points down
     const down = neighboursForGrid(2, 3, 6, 6, "plane", "triangle");
-    expect(down).toHaveLength(3);
+    expect(down).toHaveLength(12);
     expect(down.some((p) => p.row === 2 && p.col === 2)).toBe(true); // left
     expect(down.some((p) => p.row === 2 && p.col === 4)).toBe(true); // right
     expect(down.some((p) => p.row === 1 && p.col === 3)).toBe(true); // above
+    expect(down.some((p) => p.row === 3 && p.col === 3)).toBe(true); // below by vertex
   });
 
-  it("triangle corner has fewer than 3 neighbors", () => {
+  it("triangle corner has fewer neighbors than interior", () => {
     const n = neighboursForGrid(0, 0, 6, 6, "plane", "triangle");
-    expect(n.length).toBeLessThanOrEqual(2);
+    expect(n.length).toBeGreaterThanOrEqual(3);
+    expect(n.length).toBeLessThan(12);
+  });
+
+  it("triangle can disable vertex neighbors (edge-only)", () => {
+    const n = neighboursForGrid(2, 2, 6, 6, "plane", "triangle", 0, false);
+    expect(n).toHaveLength(3);
+  });
+
+  it("pentagon can disable vertex neighbors (edge-only in flower)", () => {
+    const n = neighboursForGrid(4, 12, 10, 24, "plane", "pentagon", 0, false);
+    expect(n).toHaveLength(5);
   });
 
   it("triangle neighbors never include the cell itself", () => {

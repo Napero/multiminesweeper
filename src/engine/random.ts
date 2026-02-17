@@ -10,6 +10,8 @@ export interface RandomLayout {
   cols: number;
   polygons: RandomPoint[][];
   neighbours: number[][];
+  neighboursEdge: number[][];
+  neighboursAll: number[][];
   minX: number;
   minY: number;
   maxX: number;
@@ -103,6 +105,28 @@ function polygonsTouch(a: RandomPoint[], b: RandomPoint[]): boolean {
     }
   }
   return false;
+}
+
+function sharedVertexCount(a: RandomPoint[], b: RandomPoint[]): number {
+  const epsSq = 1e-8;
+  let count = 0;
+  const usedB = new Set<number>();
+
+  for (let i = 0; i < a.length; i++) {
+    const pa = a[i];
+    for (let j = 0; j < b.length; j++) {
+      if (usedB.has(j)) continue;
+      const pb = b[j];
+      const dx = pa.x - pb.x;
+      const dy = pa.y - pb.y;
+      if (dx * dx + dy * dy <= epsSq) {
+        usedB.add(j);
+        count++;
+        break;
+      }
+    }
+  }
+  return count;
 }
 
 function generateSites(rows: number, cols: number, seed: number): RandomPoint[] {
@@ -204,7 +228,8 @@ export function buildRandomLayout(rows: number, cols: number, seed: number): Ran
     polygons[i] = poly.length > 0 ? poly : [{ x: si.x, y: si.y }];
   }
 
-  const neighbours: number[][] = Array.from({ length: n }, () => []);
+  const neighboursEdge: number[][] = Array.from({ length: n }, () => []);
+  const neighboursAll: number[][] = Array.from({ length: n }, () => []);
   const maxTouchDistSq = 12.25;
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
@@ -212,8 +237,17 @@ export function buildRandomLayout(rows: number, cols: number, seed: number): Ran
       const dy = sites[j].y - sites[i].y;
       if (dx * dx + dy * dy > maxTouchDistSq) continue;
       if (!polygonsTouch(polygons[i], polygons[j])) continue;
-      neighbours[i].push(j);
-      neighbours[j].push(i);
+      const shared = sharedVertexCount(polygons[i], polygons[j]);
+      const edge = shared >= 2;
+      const any = shared >= 1;
+      if (edge) {
+        neighboursEdge[i].push(j);
+        neighboursEdge[j].push(i);
+      }
+      if (any) {
+        neighboursAll[i].push(j);
+        neighboursAll[j].push(i);
+      }
     }
   }
 
@@ -234,7 +268,9 @@ export function buildRandomLayout(rows: number, cols: number, seed: number): Ran
     rows,
     cols,
     polygons,
-    neighbours,
+    neighbours: neighboursAll,
+    neighboursEdge,
+    neighboursAll,
     minX,
     minY,
     maxX,

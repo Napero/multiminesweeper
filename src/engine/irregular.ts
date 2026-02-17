@@ -10,6 +10,8 @@ export interface IrregularLayout {
   cols: number;
   polygons: IrregularPoint[][];
   neighbours: number[][];
+  neighboursEdge: number[][];
+  neighboursAll: number[][];
   minX: number;
   minY: number;
   maxX: number;
@@ -90,7 +92,8 @@ export function buildIrregularLayout(rows: number, cols: number, seed: number): 
   if (cached) return cached;
 
   const rects = generateRects(rows, cols, seed);
-  const neighbours: number[][] = Array.from({ length: rects.length }, () => []);
+  const neighboursEdge: number[][] = Array.from({ length: rects.length }, () => []);
+  const neighboursAll: number[][] = Array.from({ length: rects.length }, () => []);
   const eps = 1e-6;
 
   for (let i = 0; i < rects.length; i++) {
@@ -103,9 +106,18 @@ export function buildIrregularLayout(rows: number, cols: number, seed: number): 
       const shareHorizontal =
         (Math.abs(a.y1 - b.y0) < eps || Math.abs(b.y1 - a.y0) < eps) &&
         overlapLen(a.x0, a.x1, b.x0, b.x1) > 1e-4;
-      if (shareVertical || shareHorizontal) {
-        neighbours[i].push(j);
-        neighbours[j].push(i);
+      const shareCorner =
+        (Math.abs(a.x1 - b.x0) < eps || Math.abs(b.x1 - a.x0) < eps) &&
+        (Math.abs(a.y1 - b.y0) < eps || Math.abs(b.y1 - a.y0) < eps);
+      const edge = shareVertical || shareHorizontal;
+      const any = edge || shareCorner;
+      if (edge) {
+        neighboursEdge[i].push(j);
+        neighboursEdge[j].push(i);
+      }
+      if (any) {
+        neighboursAll[i].push(j);
+        neighboursAll[j].push(i);
       }
     }
   }
@@ -136,7 +148,9 @@ export function buildIrregularLayout(rows: number, cols: number, seed: number): 
     rows,
     cols,
     polygons,
-    neighbours,
+    neighbours: neighboursAll,
+    neighboursEdge,
+    neighboursAll,
     minX,
     minY,
     maxX,

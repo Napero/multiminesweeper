@@ -945,6 +945,7 @@ export class Renderer {
     cols: number,
     topology: TopologyMode,
     seed = 0,
+    includeVertexNeighbors = true,
     originRow = 0,
     originCol = 0,
   ): void {
@@ -953,7 +954,16 @@ export class Renderer {
 
     const targets = [
       { row, col },
-      ...neighboursForGrid(row, col, rows, cols, topology, this.currentShape, seed),
+      ...neighboursForGrid(
+        row,
+        col,
+        rows,
+        cols,
+        topology,
+        this.currentShape,
+        seed,
+        includeVertexNeighbors,
+      ),
     ];
 
     for (const { row: r, col: c } of targets) {
