@@ -6,6 +6,8 @@ export type TopologyMode =
   | "klein"
   | "projective";
 
+export type GridShape = "square" | "hex" | "triangle";
+
 export interface GameConfig {
   rows: number;
   cols: number;
@@ -17,6 +19,7 @@ export interface GameConfig {
   density: number;
   negativeMines: boolean;  // allow cells with negative mine counts
   topology: TopologyMode;
+  gridShape: GridShape;
 }
 
 export interface Cell {
@@ -62,4 +65,5 @@ export const DEFAULT_CONFIG: GameConfig = {
   density: 0.6,
   negativeMines: false,
   topology: "plane",
+  gridShape: "square",
 };

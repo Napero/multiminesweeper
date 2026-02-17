@@ -1,4 +1,4 @@
-import { Cell, GameConfig, Pos, TopologyMode } from "./types";
+import { Cell, GameConfig, GridShape, Pos, TopologyMode } from "./types";
 import { createRng } from "./rng";
 
 interface Bucket {
@@ -35,7 +35,7 @@ function pickRandomFromBucket(bucket: Bucket, rng: () => number): Pos {
 }
 
 export function neighbours(row: number, col: number, rows: number, cols: number): Pos[] {
-  return neighboursForTopology(row, col, rows, cols, "plane");
+  return neighboursForGrid(row, col, rows, cols, "plane", "square");
 }
 
 function wrap(v: number, size: number): number {
@@ -119,18 +119,75 @@ export function neighboursForTopology(
   cols: number,
   topology: TopologyMode,
 ): Pos[] {
+  return neighboursForGrid(row, col, rows, cols, topology, "square");
+}
+
+function shapeNeighbourDeltas(row: number, col: number, shape: GridShape): Array<{ dr: number; dc: number }> {
+  if (shape === "square") {
+    const deltas: Array<{ dr: number; dc: number }> = [];
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        deltas.push({ dr, dc });
+      }
+    }
+    return deltas;
+  }
+
+  if (shape === "hex") {
+    // Flat-top hexes using odd-r offset coordinates (staggered rows).
+    // Even rows are shifted left relative to odd rows.
+    const oddRow = row % 2 !== 0;
+    return oddRow
+      ? [
+          { dr: 0, dc: -1 },
+          { dr: 0, dc: 1 },
+          { dr: -1, dc: 0 },
+          { dr: -1, dc: 1 },
+          { dr: 1, dc: 0 },
+          { dr: 1, dc: 1 },
+        ]
+      : [
+          { dr: 0, dc: -1 },
+          { dr: 0, dc: 1 },
+          { dr: -1, dc: -1 },
+          { dr: -1, dc: 0 },
+          { dr: 1, dc: -1 },
+          { dr: 1, dc: 0 },
+        ];
+  }
+
+  const pointsUp = (row + col) % 2 === 0;
+  return pointsUp
+    ? [
+        { dr: 0, dc: -1 },
+        { dr: 0, dc: 1 },
+        { dr: 1, dc: 0 },
+      ]
+    : [
+        { dr: 0, dc: -1 },
+        { dr: 0, dc: 1 },
+        { dr: -1, dc: 0 },
+      ];
+}
+
+export function neighboursForGrid(
+  row: number,
+  col: number,
+  rows: number,
+  cols: number,
+  topology: TopologyMode,
+  shape: GridShape,
+): Pos[] {
   const result: Pos[] = [];
   const seen = new Set<string>();
-  for (let dr = -1; dr <= 1; dr++) {
-    for (let dc = -1; dc <= 1; dc++) {
-      if (dr === 0 && dc === 0) continue;
-      const normalized = normalizeForTopology(row + dr, col + dc, rows, cols, topology);
-      if (!normalized) continue;
-      const key = posKey(normalized);
-      if (!seen.has(key)) {
-        seen.add(key);
-        result.push(normalized);
-      }
+  for (const { dr, dc } of shapeNeighbourDeltas(row, col, shape)) {
+    const normalized = normalizeForTopology(row + dr, col + dc, rows, cols, topology);
+    if (!normalized) continue;
+    const key = posKey(normalized);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(normalized);
     }
   }
   return result;
@@ -271,12 +328,13 @@ export function computeHints(
   rows: number,
   cols: number,
   topology: TopologyMode = "plane",
+  shape: GridShape = "square",
 ): void {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       let sum = 0;
       let hasAdj = false;
-      for (const n of neighboursForTopology(r, c, rows, cols, topology)) {
+      for (const n of neighboursForGrid(r, c, rows, cols, topology, shape)) {
         const mc = grid[n.row][n.col].mineCount;
         sum += mc;
         if (mc !== 0) hasAdj = true;

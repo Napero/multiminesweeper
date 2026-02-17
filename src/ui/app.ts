@@ -1,4 +1,4 @@
-import { Game, GameConfig, GameStatus, TopologyMode } from "../engine/index";
+import { Game, GameConfig, GameStatus, GridShape, TopologyMode } from "../engine/index";
 import { Renderer } from "./renderer";
 import { InputHandler } from "./input";
 import { loadSpritesheet } from "../sprites";
@@ -19,6 +19,8 @@ const PRESETS: Record<string, Partial<GameConfig>> = {
   torus: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "torus" },
   mobius: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "mobius" },
   klein: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "klein" },
+  hex: { rows: 14, cols: 20, minesTotal: 130, maxMinesPerCell: 6, density: 0.6, gridShape: "hex" },
+  triangle: { rows: 12, cols: 30, minesTotal: 150, maxMinesPerCell: 6, density: 0.6, gridShape: "triangle" },
 };
 
 export function readConfigFromModal(): Partial<GameConfig> {
@@ -35,6 +37,8 @@ export function readConfigFromModal(): Partial<GameConfig> {
   const negativeMines = negEl?.checked ?? false;
   const topologyEl = document.getElementById("opt-topology") as HTMLSelectElement | null;
   const topology = (topologyEl?.value ?? "plane") as TopologyMode;
+  const shapeEl = document.getElementById("opt-shape") as HTMLSelectElement | null;
+  const gridShape = (shapeEl?.value ?? "square") as GridShape;
   const rows = val("opt-rows", 16);
   const cols = val("opt-cols", 30);
 
@@ -47,6 +51,7 @@ export function readConfigFromModal(): Partial<GameConfig> {
     density,
     negativeMines,
     topology,
+    gridShape,
     safeFirstClick: true,
   };
 }
@@ -301,7 +306,7 @@ export class App {
 
     const scale = this.computeScale();
     this.renderer = new Renderer(this.canvas, this.sheet, scale);
-    this.renderer.resize(this.game.rows, this.game.cols);
+    this.renderer.resize(this.game.rows, this.game.cols, this.game.gridShape);
 
     this.input = new InputHandler(
       this.canvas,
@@ -429,8 +434,21 @@ export class App {
     const maxW = (container?.parentElement?.clientWidth ?? window.innerWidth) - 24;
     const maxH = window.innerHeight - padding - 80;
 
-    const boardW = this.game.cols * CELL_SIZE;
-    const boardH = this.game.rows * CELL_HEIGHT;
+    const rows = this.game.rows;
+    const cols = this.game.cols;
+    let boardW = cols * CELL_SIZE;
+    let boardH = rows * CELL_HEIGHT;
+
+    const shape = this.game.gridShape;
+    if (shape === "hex") {
+      const hexH = CELL_SIZE * 2 / Math.sqrt(3);
+      boardW = cols * CELL_SIZE + CELL_SIZE * 0.5;
+      boardH = (rows - 1) * hexH * 0.75 + hexH;
+    } else if (shape === "triangle") {
+      const triH = CELL_SIZE * Math.sqrt(3) / 2;
+      boardW = cols * CELL_SIZE * 0.5 + CELL_SIZE * 0.5;
+      boardH = rows * triH;
+    }
 
     const scaleX = maxW / boardW;
     const scaleY = maxH / boardH;
@@ -442,7 +460,7 @@ export class App {
     if (!this.game) return;
     const scale = this.computeScale();
     this.renderer.scale = scale;
-    this.renderer.resize(this.game.rows, this.game.cols);
+    this.renderer.resize(this.game.rows, this.game.cols, this.game.gridShape);
     this.render();
   }
 
@@ -452,6 +470,7 @@ export class App {
       this.renderer.renderHintOverlay(
         this.hintHoverPos.row, this.hintHoverPos.col,
         this.game.rows, this.game.cols,
+        this.game.topology,
       );
     }
     this.updateSmiley();
