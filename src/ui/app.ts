@@ -22,14 +22,14 @@ const PRESETS: Record<string, Partial<GameConfig>> = {
   torus: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "torus" },
   mobius: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "mobius" },
   klein: { rows: 16, cols: 30, minesTotal: 170, maxMinesPerCell: 6, density: 0.6, topology: "klein" },
-  hex: { rows: 14, cols: 20, minesTotal: 130, maxMinesPerCell: 6, density: 0.6, gridShape: "hex" },
-  triangle: { rows: 12, cols: 30, minesTotal: 150, maxMinesPerCell: 6, density: 0.6, gridShape: "triangle" },
+  hex: { rows: 14, cols: 20, minesTotal: 120, maxMinesPerCell: 6, density: 0.6, gridShape: "hex" },
+  triangle: { rows: 12, cols: 30, minesTotal: 120, maxMinesPerCell: 6, density: 0.6, gridShape: "triangle" },
   // For pentagon mode, rows/cols represent flower-grid dimensions.
-  pentagon: { rows: 6, cols: 9, minesTotal: 155, maxMinesPerCell: 6, density: 0.6, gridShape: "pentagon" },
-  "irregular-rectangle": { rows: 16, cols: 24, minesTotal: 180, maxMinesPerCell: 6, density: 0.6, gridShape: "irregular" },
+  pentagon: { rows: 6, cols: 9, minesTotal: 110, maxMinesPerCell: 6, density: 0.6, gridShape: "pentagon" },
+  "irregular-rectangle": { rows: 16, cols: 24, minesTotal: 130, maxMinesPerCell: 6, density: 0.6, gridShape: "irregular" },
   irregular: { rows: 16, cols: 24, minesTotal: 180, maxMinesPerCell: 6, density: 0.6, gridShape: "irregular" }, // legacy alias
-  "random-grid": { rows: 14, cols: 22, minesTotal: 120, maxMinesPerCell: 6, density: 0.6, gridShape: "random" },
-  random: { rows: 14, cols: 22, minesTotal: 120, maxMinesPerCell: 6, density: 0.6, gridShape: "random" }, // alias
+  "random-grid": { rows: 14, cols: 22, minesTotal: 110, maxMinesPerCell: 6, density: 0.6, gridShape: "random" },
+  random: { rows: 14, cols: 22, minesTotal: 110, maxMinesPerCell: 6, density: 0.6, gridShape: "random" }, // alias
 };
 
 interface UiPreferences {
@@ -562,7 +562,7 @@ export class App {
     // Named preset: #preset=hex
     const presetName = params.get("preset");
     if (presetName && PRESETS[presetName]) {
-      const cfg: Partial<GameConfig> = { ...PRESETS[presetName], includeVertexNeighbors: true };
+      const cfg: Partial<GameConfig> = { ...this.applyPresetMode(PRESETS[presetName]), includeVertexNeighbors: true };
       const seed = params.get("seed");
       if (seed) {
         cfg.seed = parseSeedInput(seed);
