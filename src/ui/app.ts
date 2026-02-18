@@ -32,6 +32,28 @@ const PRESETS: Record<string, Partial<GameConfig>> = {
   random: { rows: 14, cols: 22, minesTotal: 110, maxMinesPerCell: 6, density: 0.6, gridShape: "random" }, // alias
 };
 
+// Classic single-mine totals used when preset multimines is disabled.
+const PRESET_SINGLE_MINE_TOTALS: Record<string, number> = {
+  beginner: 10,
+  intermediate: 40,
+  hard: 99,
+  expert: 130,
+  nightmare: 170,
+  "intermediate-negative": 40,
+  "hard-negative": 99,
+  cylinder: 99,
+  torus: 99,
+  mobius: 99,
+  klein: 99,
+  hex: 56,
+  triangle: 72,
+  pentagon: 65,
+  "irregular-rectangle": 72,
+  irregular: 72,
+  "random-grid": 58,
+  random: 58,
+};
+
 interface UiPreferences {
   overmarkHighlight: boolean;
   presetsUseMultimines: boolean;
@@ -147,12 +169,14 @@ export class App {
     return this.preferences.presetsUseMultimines;
   }
 
-  private applyPresetMode(base: Partial<GameConfig>): Partial<GameConfig> {
+  private applyPresetMode(base: Partial<GameConfig>, presetName?: string): Partial<GameConfig> {
     if (this.presetsUseMultimines()) return { ...base };
     const baseMax = Math.max(1, Math.floor(base.maxMinesPerCell ?? DEFAULT_CONFIG.maxMinesPerCell));
     const baseMines = Math.max(1, Math.floor(base.minesTotal ?? DEFAULT_CONFIG.minesTotal));
-    // Convert multi-mine presets to a saner classic-mine count.
-    const reducedMines = Math.max(1, Math.round(baseMines / Math.sqrt(baseMax)));
+    const mappedReduced = presetName ? PRESET_SINGLE_MINE_TOTALS[presetName] : undefined;
+    // Fallback conversion if a preset has no explicit single-mine total.
+    const fallbackReduced = Math.max(1, Math.round(baseMines / Math.sqrt(baseMax)));
+    const reducedMines = Math.max(1, Math.min(baseMines, mappedReduced ?? fallbackReduced));
     return {
       ...base,
       maxMinesPerCell: 1,
@@ -287,7 +311,7 @@ export class App {
         } else if (PRESETS[preset]) {
           this.newGame(
             {
-              ...this.applyPresetMode(PRESETS[preset]),
+              ...this.applyPresetMode(PRESETS[preset], preset),
               seed: Date.now(),
               includeVertexNeighbors: true,
             },
@@ -562,7 +586,7 @@ export class App {
     // Named preset: #preset=hex
     const presetName = params.get("preset");
     if (presetName && PRESETS[presetName]) {
-      const cfg: Partial<GameConfig> = { ...this.applyPresetMode(PRESETS[presetName]), includeVertexNeighbors: true };
+      const cfg: Partial<GameConfig> = { ...this.applyPresetMode(PRESETS[presetName], presetName), includeVertexNeighbors: true };
       const seed = params.get("seed");
       if (seed) {
         cfg.seed = parseSeedInput(seed);
