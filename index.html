@@ -178,6 +178,78 @@
     #help-panel h3 { font-size: 13px; margin-bottom:10px; }
     #help-panel button { padding: 4px 10px; cursor: pointer; }
 
+    /* Preferences modal */
+    #preferences-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 210;
+      align-items: center;
+      justify-content: center;
+    }
+    #preferences-overlay.open { display: flex; }
+    #preferences-panel {
+      background: #c0c0c0;
+      border: 3px outset #fff;
+      padding: 14px 18px;
+      min-width: 360px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      -webkit-font-smoothing: none;
+    }
+    #preferences-panel h3 {
+      font-size: 12px;
+      margin: 0 0 10px 0;
+    }
+    #preferences-panel label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      margin-bottom: 7px;
+      gap: 12px;
+    }
+    #preferences-panel .btn-row {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 10px;
+    }
+    #preferences-panel button {
+      font-size: 11px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      -webkit-font-smoothing: none;
+      padding: 3px 12px;
+      cursor: pointer;
+    }
+
+    /* Topology preview modal */
+    #topology-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 205;
+      align-items: center;
+      justify-content: center;
+    }
+    #topology-overlay.open { display: flex; }
+    #topology-panel {
+      background: #c0c0c0;
+      border: 3px outset #fff;
+      padding: 10px 12px;
+      min-width: 860px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      -webkit-font-smoothing: none;
+    }
+    #topology-panel button {
+      font-size: 11px;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      -webkit-font-smoothing: none;
+      padding: 3px 10px;
+      cursor: pointer;
+    }
+
     #game-container {
       border: 3px outset #fff;
       background: #c0c0c0;
@@ -212,7 +284,7 @@
   </style>
 </head>
 <body>
-  <!-- Toolbar: Settings | Help | sep | Smiley | Timer | sep | Hint | GiveUp -->
+  <!-- Toolbar: Settings | Help | Topology viewer | sep | Smiley | Timer | sep | Hint | GiveUp -->
   <div id="toolbar">
     <div id="settings-anchor">
       <canvas id="btn-settings" width="26" height="26" title="Settings"></canvas>
@@ -238,10 +310,12 @@
         <button class="preset" data-preset="irregular-rectangle">Irregular rectangle grid</button>
         <button class="preset" data-preset="random-grid">Random polygon grid</button>
         <div class="menu-divider"><span>Other</span></div>
-        <button class="preset" data-preset="custom">Custom...</button>
+        <button class="preset" data-preset="custom">Custom game...</button>
+        <button class="preset" data-preset="preferences">Preferences...</button>
       </div>
     </div>
     <canvas id="btn-help" width="26" height="26" title="Help"></canvas>
+    <canvas id="btn-topology-eye" width="26" height="26" title="Topology preview"></canvas>
     <div class="toolbar-sep"></div>
     <canvas id="smiley" width="26" height="26" title="New Game"></canvas>
     <span id="timer">0:00</span>
@@ -333,7 +407,51 @@
   <div id="mine-breakdown">
     <canvas id="breakdown-canvas" height="28"></canvas>
   </div>
+
+  <!-- Topology viewer modal -->
+  <div id="topology-overlay">
+    <div id="topology-panel">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h3 style="font-size:12px; margin:0;">Topology Preview</h3>
+        <button id="topology-close">Close</button>
+      </div>
+      <canvas id="topology-canvas" width="820" height="620" style="border:1px solid #808080; background:#1f2430;"></canvas>
+      <p style="margin-top:6px; font-size:10px; color:#333;">Visual preview only (non-playable).</p>
+    </div>
+  </div>
+
+  <!-- Preferences modal -->
+  <div id="preferences-overlay">
+    <div id="preferences-panel">
+      <h3>Preferences</h3>
+      <label title="Highlight opened number cells in red when markers exceed the hint.">
+        Overmark red warning
+        <input id="pref-overmark-highlight" type="checkbox">
+      </label>
+      <label title="Apply presets with the multimines rules enabled.">
+        Presets use multimines
+        <input id="pref-presets-multimines" type="checkbox" checked>
+      </label>
+      <label title="If enabled, show the topology eye button even on plane boards.">
+        Eye button on plane
+        <input id="pref-topology-plane-button" type="checkbox">
+      </label>
+      <label title="Show current topology in the status bar text.">
+        Show topology in status
+        <input id="pref-topology-status" type="checkbox" checked>
+      </label>
+      <label title="Refresh topology preview every render while the preview window is open.">
+        Live topology preview
+        <input id="pref-topology-live" type="checkbox" checked>
+      </label>
+      <div class="btn-row">
+        <button id="preferences-cancel">Cancel</button>
+        <button id="preferences-defaults">Defaults</button>
+        <button id="preferences-save">Save</button>
+      </div>
+      <div style="margin-top:6px; font-size:10px; color:#555;">Only non-default values are persisted in local storage.</div>
+    </div>
+  </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
-

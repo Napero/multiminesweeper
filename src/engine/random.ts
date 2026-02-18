@@ -239,7 +239,8 @@ export function buildRandomLayout(rows: number, cols: number, seed: number): Ran
       if (!polygonsTouch(polygons[i], polygons[j])) continue;
       const shared = sharedVertexCount(polygons[i], polygons[j]);
       const edge = shared >= 2;
-      const any = shared >= 1;
+      // Vertex-neighbor mode: any geometric touch counts (edge or corner).
+      const any = true;
       if (edge) {
         neighboursEdge[i].push(j);
         neighboursEdge[j].push(i);

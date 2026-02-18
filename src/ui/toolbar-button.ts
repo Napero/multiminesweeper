@@ -1,17 +1,18 @@
 // Sprite-based toolbar button using buttons.png (52×130, 2 cols × 5 rows of 26×26)
 // Column 0 = normal, column 1 = pressed
-// Rows: 0=giveup, 1=settings, 2=hint, 3=help, 4=empty
+// Rows: 0=giveup, 1=settings, 2=hint, 3=help, 4=topology
 
 const SIZE = 26;
 const DISPLAY_SIZE = 52;
 
-export type ButtonKind = "giveup" | "settings" | "hint" | "help";
+export type ButtonKind = "giveup" | "settings" | "hint" | "help" | "topology";
 
 const ROW: Record<ButtonKind, number> = {
   giveup: 0,
   settings: 1,
   hint: 2,
   help: 3,
+  topology: 4,
 };
 
 let sharedSheet: HTMLImageElement | null = null;

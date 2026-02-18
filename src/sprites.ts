@@ -2,7 +2,7 @@
 //
 // Row 0: cell_closed, cell_open, 1w..6w
 // Row 1: 7w..9w, slim digits 1s..9s,0s (8px each @ x=48)
-// Row 2: flag1..flag6, flag_generic, (empty)
+// Row 2: flag1..flag6, flag_generic, flag_classic
 // Row 3: bomb1..bomb6, bomb_generic, cross_overlay
 // Row 4: (empty ×8)
 // Row 5: question_mark, red_bg, (empty ×6)
@@ -105,6 +105,7 @@ export const SPRITE_FLAG: Record<number, SpriteRect> = {
   6: tile(5, 2),
 };
 export const SPRITE_FLAG_GENERIC: SpriteRect = tile(6, 2);
+export const SPRITE_FLAG_CLASSIC: SpriteRect = tile(7, 2);
 
 // Positive bombs (1–6) + generic fallback for >6
 export const SPRITE_BOMB: Record<number, SpriteRect> = {

@@ -14,6 +14,7 @@ import {
   SPRITE_MINUS,
   SPRITE_FLAG,
   SPRITE_FLAG_GENERIC,
+  SPRITE_FLAG_CLASSIC,
   SPRITE_BOMB,
   SPRITE_BOMB_GENERIC,
   SPRITE_CROSS,
@@ -257,6 +258,7 @@ export class Renderer {
   private currentShape: GridShape = "square";
   private gridRows = 0;
   private gridCols = 0;
+  private currentMaxMinesPerCell = 6;
   private pentagonOffsetX = 0;
   private pentagonOffsetY = 0;
   private polygonMesh: PolygonMesh | null = null;
@@ -403,8 +405,10 @@ export class Renderer {
     game: Game,
     pressedCell: { row: number; col: number } | null = null,
     viewport?: { originRow: number; originCol: number; rows: number; cols: number },
+    showOvermarkHighlight = false,
   ): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.currentMaxMinesPerCell = game.config.maxMinesPerCell;
 
     const originRow = viewport?.originRow ?? 0;
     const originCol = viewport?.originCol ?? 0;
@@ -417,15 +421,16 @@ export class Renderer {
         const gc = originCol + vc;
         if (gr < 0 || gc < 0 || gr >= game.rows || gc >= game.cols) continue;
         const isPressed = pressedCell !== null && pressedCell.row === gr && pressedCell.col === gc;
+        const overMarked = showOvermarkHighlight && this.isCellOverMarked(game, gr, gc);
         const view = game.cellView(gr, gc);
-        this.renderCell({ ...view, row: vr, col: vc }, game.status, isPressed);
+        this.renderCell({ ...view, row: vr, col: vc }, game.status, isPressed, overMarked);
       }
     }
   }
 
-  renderCell(view: CellView, status: GameStatus, isPressed = false): void {
+  renderCell(view: CellView, status: GameStatus, isPressed = false, overMarked = false): void {
     if (this.currentShape !== "square") {
-      this.renderCellGeometric(view, status, isPressed);
+      this.renderCellGeometric(view, status, isPressed, overMarked);
       return;
     }
 
@@ -462,12 +467,23 @@ export class Renderer {
       } else {
         // Normal opened cell with hint
         if (fb) {
-          drawCellOpen(this.ctx, dx, dy, dw, dh);
+          if (overMarked) drawRedBg(this.ctx, dx, dy, dw, dh);
+          else drawCellOpen(this.ctx, dx, dy, dw, dh);
           const h = view.hint ?? 0;
-          if (h !== 0 || view.adjacentMines) drawHintNumber(this.ctx, h, dx, dy, dw, dh, view.adjacentMines);
+          if (overMarked && h !== 0) {
+            drawHintNumber(this.ctx, h, dx, dy, dw, dh, view.adjacentMines);
+          } else if (h !== 0 || view.adjacentMines) {
+            drawHintNumber(this.ctx, h, dx, dy, dw, dh, view.adjacentMines);
+          }
         } else {
-          this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh);
-          this.renderHint(view.hint ?? 0, view.adjacentMines, dx, dy, dw, dh);
+          if (overMarked) this.drawSprite(SPRITE_RED_BG, dx, dy, dw, dh);
+          else this.drawSprite(SPRITE_CELL_OPEN, dx, dy, dw, dh);
+          const h = view.hint ?? 0;
+          if (overMarked && h !== 0) {
+            this.renderHintOutlined(h, view.adjacentMines, dx, dy, dw, dh);
+          } else {
+            this.renderHint(h, view.adjacentMines, dx, dy, dw, dh);
+          }
         }
       }
     } else {
@@ -498,7 +514,7 @@ export class Renderer {
     }
   }
 
-  private renderCellGeometric(view: CellView, status: GameStatus, isPressed = false): void {
+  private renderCellGeometric(view: CellView, status: GameStatus, isPressed = false, overMarked = false): void {
     const g = this.getCellGeometry(view.row, view.col);
     const fb = this.useFallback;
     const lost = status === GameStatus.Lost;
@@ -527,7 +543,7 @@ export class Renderer {
     const ih = side;
 
     if (baseOpen) {
-      this.drawOpenCellFill(g.points, view.exploded);
+      this.drawOpenCellFill(g.points, view.exploded || overMarked);
       this.drawCellOutline(g.points);
     } else {
       this.drawCellBevel(g.points, this.currentShape);
@@ -544,10 +560,18 @@ export class Renderer {
       } else {
         this.withCellClip(g.points, () => {
           const h = view.hint ?? 0;
-          if (fb) {
-            if (h !== 0 || view.adjacentMines) drawHintNumber(this.ctx, h, ix, iy, iw, ih, view.adjacentMines);
+          if (overMarked && h !== 0) {
+            if (fb) {
+              drawHintNumber(this.ctx, h, ix, iy, iw, ih, view.adjacentMines);
+            } else {
+              this.renderHintOutlined(h, view.adjacentMines, ix, iy, iw, ih);
+            }
           } else {
-            this.renderHint(h, view.adjacentMines, ix, iy, iw, ih);
+            if (fb) {
+              if (h !== 0 || view.adjacentMines) drawHintNumber(this.ctx, h, ix, iy, iw, ih, view.adjacentMines);
+            } else {
+              this.renderHint(h, view.adjacentMines, ix, iy, iw, ih);
+            }
           }
         });
       }
@@ -824,9 +848,14 @@ export class Renderer {
   /** Draw a flag sprite. Positive = normal, negative = inverted + flipped vertically. */
   private drawFlagSprite(count: number, dx: number, dy: number, dw: number, dh: number): void {
     const abs = Math.abs(count);
-    const sprite = SPRITE_FLAG[abs] ?? SPRITE_FLAG_GENERIC;
+    const useClassicSingle = this.currentMaxMinesPerCell === 1 && abs === 1;
+    const sprite = useClassicSingle ? SPRITE_FLAG_CLASSIC : (SPRITE_FLAG[abs] ?? SPRITE_FLAG_GENERIC);
     if (count < 0) {
-      this.drawSpriteInvertedFlipped(sprite, dx, dy, dw, dh);
+      if (useClassicSingle) {
+        this.drawSpriteInverted(sprite, dx, dy, dw, dh);
+      } else {
+        this.drawSpriteInvertedFlipped(sprite, dx, dy, dw, dh);
+      }
     } else {
       this.drawSprite(sprite, dx, dy, dw, dh);
     }
@@ -864,6 +893,34 @@ export class Renderer {
     }
   }
 
+  private renderHintOutlined(hint: number, adjacentMines: boolean, dx: number, dy: number, dw: number, dh: number): void {
+    if (hint === 0) {
+      if (adjacentMines) {
+        this.drawSpriteWithWhiteOutline(SPRITE_NUM_WIDE_NEG[0], dx, dy, dw, dh, 1);
+      }
+      return;
+    }
+
+    const abs = Math.abs(hint);
+    const neg = hint < 0;
+
+    if (abs <= 9) {
+      const sprite = neg ? SPRITE_NUM_WIDE_NEG[abs] : SPRITE_NUM_WIDE[abs];
+      this.drawSpriteWithWhiteOutline(sprite, dx, dy, dw, dh, 1);
+      return;
+    }
+
+    const tens = Math.floor(abs / 10);
+    const ones = abs % 10;
+    const slimSet = neg ? SPRITE_DIGIT_SLIM_NEG : SPRITE_DIGIT_SLIM;
+    const halfW = dw / 2;
+    this.drawSpriteWithWhiteOutline(slimSet[tens], dx, dy, halfW, dh, 1);
+    this.drawSpriteWithWhiteOutline(slimSet[ones], dx + halfW, dy, halfW, dh, 1);
+    if (neg) {
+      this.drawSpriteWithWhiteOutline(SPRITE_MINUS, dx, dy, dw, dh, 1);
+    }
+  }
+
   private drawSprite(
     sprite: SpriteRect,
     dx: number,
@@ -883,6 +940,49 @@ export class Renderer {
       dw,
       dh,
     );
+  }
+
+  private drawSpriteWithWhiteOutline(
+    sprite: SpriteRect,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+    outlineTexels = 1,
+  ): void {
+    if (!this.sheet) {
+      this.drawSprite(sprite, dx, dy, dw, dh);
+      return;
+    }
+    const ic = this.invertCanvas;
+    const ictx = this.invertCtx;
+    ic.width = sprite.w;
+    ic.height = sprite.h;
+    ictx.clearRect(0, 0, sprite.w, sprite.h);
+    ictx.drawImage(this.sheet, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, sprite.w, sprite.h);
+    ictx.globalCompositeOperation = "source-in";
+    ictx.fillStyle = "#ffffff";
+    ictx.fillRect(0, 0, sprite.w, sprite.h);
+    ictx.globalCompositeOperation = "source-over";
+
+    // Keep pixel consistency: outline thickness is in source texels.
+    const texelW = dw / Math.max(1, sprite.w);
+    const texelH = dh / Math.max(1, sprite.h);
+    const o = Math.max(1, Math.round(Math.min(texelW, texelH) * outlineTexels));
+    const offsets = [
+      { x: -o, y: 0 },
+      { x: o, y: 0 },
+      { x: 0, y: -o },
+      { x: 0, y: o },
+      { x: -o, y: -o },
+      { x: -o, y: o },
+      { x: o, y: -o },
+      { x: o, y: o },
+    ];
+    for (const off of offsets) {
+      this.ctx.drawImage(ic, 0, 0, sprite.w, sprite.h, dx + off.x, dy + off.y, dw, dh);
+    }
+    this.drawSprite(sprite, dx, dy, dw, dh);
   }
 
   /** Draw a sprite with inverted colors (preserving transparency). */
@@ -938,6 +1038,28 @@ export class Renderer {
     ictx.restore();
     ictx.globalCompositeOperation = "source-over";
     this.ctx.drawImage(ic, 0, 0, sprite.w, sprite.h, dx, dy, dw, dh);
+  }
+
+  private isCellOverMarked(game: Game, row: number, col: number): boolean {
+    if (game.status !== GameStatus.Playing) return false;
+    const cell = game.cell(row, col);
+    if (!cell.opened || cell.mineCount !== 0 || cell.hint <= 0) return false;
+    let markerSum = 0;
+    const neighbors = neighboursForGrid(
+      row,
+      col,
+      game.rows,
+      game.cols,
+      game.topology,
+      game.gridShape,
+      game.config.seed,
+      game.config.includeVertexNeighbors,
+    );
+    for (const n of neighbors) {
+      const nc = game.cell(n.row, n.col);
+      if (!nc.opened) markerSum += nc.markerCount;
+    }
+    return markerSum > cell.hint;
   }
 
   renderHintOverlay(

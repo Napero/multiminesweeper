@@ -6,6 +6,7 @@ import { SPRITE_BOMB, SpriteRect } from "../sprites";
 import { Smiley, SmileyState } from "./smiley";
 import { ToolbarButton } from "./toolbar-button";
 import { drawBomb } from "./fallback";
+import { TopologyPreviewCell, TopologyViewer } from "./topology-viewer";
 
 const PENTAGON_PETALS = 6;
 
@@ -29,6 +30,28 @@ const PRESETS: Record<string, Partial<GameConfig>> = {
   irregular: { rows: 16, cols: 24, minesTotal: 180, maxMinesPerCell: 6, density: 0.6, gridShape: "irregular" }, // legacy alias
   "random-grid": { rows: 14, cols: 22, minesTotal: 120, maxMinesPerCell: 6, density: 0.6, gridShape: "random" },
   random: { rows: 14, cols: 22, minesTotal: 120, maxMinesPerCell: 6, density: 0.6, gridShape: "random" }, // alias
+};
+
+interface UiPreferences {
+  overmarkHighlight: boolean;
+  presetsUseMultimines: boolean;
+  showTopologyButtonOnPlane: boolean;
+  showTopologyInStatusBar: boolean;
+  liveTopologyPreview: boolean;
+}
+
+const PREFERENCES_STORAGE_KEY = "multiminesweeper.preferences.v1";
+const DEFAULT_PREFERENCES: UiPreferences = {
+  // Requested default: disabled unless user opts in.
+  overmarkHighlight: false,
+  // Keep current gameplay behavior by default.
+  presetsUseMultimines: true,
+  // Keep current visibility rule by default (only non-plane).
+  showTopologyButtonOnPlane: false,
+  // Keep current status-bar behavior by default.
+  showTopologyInStatusBar: true,
+  // Keep current live-preview behavior by default.
+  liveTopologyPreview: true,
 };
 
 function parseSeedInput(seedStr: string): number {
@@ -104,9 +127,39 @@ export class App {
     const overlay = document.getElementById("help-overlay");
     if (overlay && ev.target === overlay) this.closeHelp();
   };
+  private topologyCloseClickHandler = () => this.closeTopologyPreview();
+  private topologyOverlayClickHandler = (ev: MouseEvent) => {
+    const overlay = document.getElementById("topology-overlay");
+    if (overlay && ev.target === overlay) this.closeTopologyPreview();
+  };
+  private preferencesCloseClickHandler = () => this.closePreferencesModal();
+  private preferencesOverlayClickHandler = (ev: MouseEvent) => {
+    const overlay = document.getElementById("preferences-overlay");
+    if (overlay && ev.target === overlay) this.closePreferencesModal();
+  };
   private breakdownInvertCanvas = document.createElement("canvas");
   private breakdownInvertCtx = this.breakdownInvertCanvas.getContext("2d")!;
   private seedLocked = false;
+  private topologyViewer: TopologyViewer | null = null;
+  private preferences: UiPreferences = { ...DEFAULT_PREFERENCES };
+
+  private presetsUseMultimines(): boolean {
+    return this.preferences.presetsUseMultimines;
+  }
+
+  private applyPresetMode(base: Partial<GameConfig>): Partial<GameConfig> {
+    if (this.presetsUseMultimines()) return { ...base };
+    const baseMax = Math.max(1, Math.floor(base.maxMinesPerCell ?? DEFAULT_CONFIG.maxMinesPerCell));
+    const baseMines = Math.max(1, Math.floor(base.minesTotal ?? DEFAULT_CONFIG.minesTotal));
+    // Convert multi-mine presets to a saner classic-mine count.
+    const reducedMines = Math.max(1, Math.round(baseMines / Math.sqrt(baseMax)));
+    return {
+      ...base,
+      maxMinesPerCell: 1,
+      negativeMines: false,
+      minesTotal: reducedMines,
+    };
+  }
 
   private normalizeConfigForEngine(cfg: GameConfig): GameConfig {
     if (cfg.gridShape !== "pentagon") return cfg;
@@ -115,6 +168,48 @@ export class App {
       rows: Math.max(1, Math.floor(cfg.rows)),
       cols: Math.max(1, Math.floor(cfg.cols)) * PENTAGON_PETALS,
     };
+  }
+
+  private loadPreferences(): UiPreferences {
+    let raw: string | null = null;
+    try {
+      raw = window.localStorage.getItem(PREFERENCES_STORAGE_KEY);
+    } catch {
+      return { ...DEFAULT_PREFERENCES };
+    }
+    if (!raw) return { ...DEFAULT_PREFERENCES };
+    try {
+      const parsed = JSON.parse(raw) as Partial<UiPreferences>;
+      const prefs: UiPreferences = { ...DEFAULT_PREFERENCES };
+      for (const key of Object.keys(DEFAULT_PREFERENCES) as Array<keyof UiPreferences>) {
+        if (typeof parsed[key] === "boolean") prefs[key] = parsed[key] as boolean;
+      }
+      return prefs;
+    } catch {
+      return { ...DEFAULT_PREFERENCES };
+    }
+  }
+
+  private persistPreferences(): void {
+    const overrides: Partial<UiPreferences> = {};
+    for (const key of Object.keys(DEFAULT_PREFERENCES) as Array<keyof UiPreferences>) {
+      if (this.preferences[key] !== DEFAULT_PREFERENCES[key]) {
+        overrides[key] = this.preferences[key];
+      }
+    }
+    if (Object.keys(overrides).length === 0) {
+      try {
+        window.localStorage.removeItem(PREFERENCES_STORAGE_KEY);
+      } catch {
+        // Ignore persistence failures (private mode/restricted storage).
+      }
+      return;
+    }
+    try {
+      window.localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(overrides));
+    } catch {
+      // Ignore persistence failures (private mode/restricted storage).
+    }
   }
 
   constructor(canvas: HTMLCanvasElement, config: Partial<GameConfig> = {}) {
@@ -128,6 +223,7 @@ export class App {
     if (hashConfig) {
       this.config = hashConfig;
     }
+    this.preferences = this.loadPreferences();
     try {
       this.sheet = await loadSpritesheet();
     } catch {
@@ -173,6 +269,11 @@ export class App {
       const btn = new ToolbarButton(helpCanvas, "help", () => this.openHelp());
       await btn.ready;
     }
+    const topologyCanvas = document.getElementById("btn-topology-eye") as HTMLCanvasElement | null;
+    if (topologyCanvas) {
+      const btn = new ToolbarButton(topologyCanvas, "topology", () => this.toggleTopologyPreview());
+      await btn.ready;
+    }
 
     // Settings dropdown: presets + custom
     document.querySelectorAll("#settings-dropdown .preset").forEach((el) => {
@@ -181,9 +282,15 @@ export class App {
         this.closeSettingsDropdown();
         if (preset === "custom") {
           this.openCustomModal();
+        } else if (preset === "preferences") {
+          this.openPreferencesModal();
         } else if (PRESETS[preset]) {
           this.newGame(
-            { ...PRESETS[preset], seed: Date.now(), includeVertexNeighbors: true },
+            {
+              ...this.applyPresetMode(PRESETS[preset]),
+              seed: Date.now(),
+              includeVertexNeighbors: true,
+            },
             { lockSeed: false },
           );
         }
@@ -207,6 +314,12 @@ export class App {
     });
     document.getElementById("help-close")?.addEventListener("click", this.helpCloseClickHandler);
     document.getElementById("help-overlay")?.addEventListener("click", this.helpOverlayClickHandler);
+    document.getElementById("topology-close")?.addEventListener("click", this.topologyCloseClickHandler);
+    document.getElementById("topology-overlay")?.addEventListener("click", this.topologyOverlayClickHandler);
+    document.getElementById("preferences-cancel")?.addEventListener("click", this.preferencesCloseClickHandler);
+    document.getElementById("preferences-defaults")?.addEventListener("click", () => this.resetPreferencesFormToDefaults());
+    document.getElementById("preferences-save")?.addEventListener("click", () => this.savePreferencesFromModal());
+    document.getElementById("preferences-overlay")?.addEventListener("click", this.preferencesOverlayClickHandler);
 
     // Density slider label sync
     const densitySlider = document.getElementById("opt-density") as HTMLInputElement | null;
@@ -303,6 +416,8 @@ export class App {
       this.openHelp();
     } else if (e.key === "Escape") {
       this.closeHelp();
+      this.closeTopologyPreview();
+      this.closePreferencesModal();
       this.closeCustomModal();
       this.closeSettingsDropdown();
     }
@@ -325,12 +440,118 @@ export class App {
     document.getElementById("custom-overlay")?.classList.remove("open");
   }
 
+  private syncPreferencesModalFromCurrent(): void {
+    const setChecked = (id: string, value: boolean) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (el) el.checked = value;
+    };
+    setChecked("pref-overmark-highlight", this.preferences.overmarkHighlight);
+    setChecked("pref-presets-multimines", this.preferences.presetsUseMultimines);
+    setChecked("pref-topology-plane-button", this.preferences.showTopologyButtonOnPlane);
+    setChecked("pref-topology-status", this.preferences.showTopologyInStatusBar);
+    setChecked("pref-topology-live", this.preferences.liveTopologyPreview);
+  }
+
+  private resetPreferencesFormToDefaults(): void {
+    const setChecked = (id: string, value: boolean) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (el) el.checked = value;
+    };
+    setChecked("pref-overmark-highlight", DEFAULT_PREFERENCES.overmarkHighlight);
+    setChecked("pref-presets-multimines", DEFAULT_PREFERENCES.presetsUseMultimines);
+    setChecked("pref-topology-plane-button", DEFAULT_PREFERENCES.showTopologyButtonOnPlane);
+    setChecked("pref-topology-status", DEFAULT_PREFERENCES.showTopologyInStatusBar);
+    setChecked("pref-topology-live", DEFAULT_PREFERENCES.liveTopologyPreview);
+  }
+
+  private openPreferencesModal(): void {
+    this.syncPreferencesModalFromCurrent();
+    document.getElementById("preferences-overlay")?.classList.add("open");
+  }
+
+  private closePreferencesModal(): void {
+    document.getElementById("preferences-overlay")?.classList.remove("open");
+  }
+
+  private savePreferencesFromModal(): void {
+    const readChecked = (id: string, fallback: boolean): boolean => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      return el?.checked ?? fallback;
+    };
+    this.preferences = {
+      overmarkHighlight: readChecked("pref-overmark-highlight", DEFAULT_PREFERENCES.overmarkHighlight),
+      presetsUseMultimines: readChecked("pref-presets-multimines", DEFAULT_PREFERENCES.presetsUseMultimines),
+      showTopologyButtonOnPlane: readChecked("pref-topology-plane-button", DEFAULT_PREFERENCES.showTopologyButtonOnPlane),
+      showTopologyInStatusBar: readChecked("pref-topology-status", DEFAULT_PREFERENCES.showTopologyInStatusBar),
+      liveTopologyPreview: readChecked("pref-topology-live", DEFAULT_PREFERENCES.liveTopologyPreview),
+    };
+    this.persistPreferences();
+    this.closePreferencesModal();
+    if (this.game) {
+      this.updateTopologyButtonVisibility();
+      this.render();
+    }
+  }
+
   private openHelp(): void {
     document.getElementById("help-overlay")?.classList.add("open");
   }
 
   private closeHelp(): void {
     document.getElementById("help-overlay")?.classList.remove("open");
+  }
+
+  private ensureTopologyViewer(): void {
+    if (this.topologyViewer) return;
+    const canvas = document.getElementById("topology-canvas") as HTMLCanvasElement | null;
+    if (!canvas) return;
+    this.topologyViewer = new TopologyViewer(canvas);
+  }
+
+  private refreshTopologyPreview(): void {
+    this.ensureTopologyViewer();
+    if (!this.topologyViewer) return;
+    const cells: TopologyPreviewCell[] = [];
+    for (let r = 0; r < this.game.rows; r++) {
+      for (let c = 0; c < this.game.cols; c++) {
+        const view = this.game.cellView(r, c);
+        cells.push({
+          opened: view.opened,
+          markerCount: view.markerCount,
+          exploded: view.exploded,
+          wrongMarker: view.wrongMarker,
+          hint: view.hint,
+          mineCount: view.mineCount,
+        });
+      }
+    }
+    this.topologyViewer.setBoard(this.game.topology, this.game.rows, this.game.cols, cells);
+  }
+
+  private openTopologyPreview(): void {
+    document.getElementById("topology-overlay")?.classList.add("open");
+    this.refreshTopologyPreview();
+    this.topologyViewer?.start();
+  }
+
+  private closeTopologyPreview(): void {
+    document.getElementById("topology-overlay")?.classList.remove("open");
+    this.topologyViewer?.stop();
+  }
+
+  private toggleTopologyPreview(): void {
+    const overlay = document.getElementById("topology-overlay");
+    if (!overlay) return;
+    if (overlay.classList.contains("open")) this.closeTopologyPreview();
+    else this.openTopologyPreview();
+  }
+
+  private updateTopologyButtonVisibility(): void {
+    const btn = document.getElementById("btn-topology-eye") as HTMLCanvasElement | null;
+    if (!btn || !this.game) return;
+    const show = this.preferences.showTopologyButtonOnPlane || this.game.topology !== "plane";
+    btn.style.display = show ? "block" : "none";
+    if (!show) this.closeTopologyPreview();
   }
 
   private readConfigFromHash(): Partial<GameConfig> | null {
@@ -550,7 +771,9 @@ export class App {
     this.pressedCellPreview = null;
     this.hintBtn?.setActive(false);
     this.updateTimerDisplay();
+    this.updateTopologyButtonVisibility();
     this.render();
+    this.refreshTopologyPreview();
     this.writeConfigToHash();
   }
 
@@ -621,7 +844,7 @@ export class App {
   }
 
   private render(): void {
-    this.renderer.renderBoard(this.game, this.pressedCellPreview);
+    this.renderer.renderBoard(this.game, this.pressedCellPreview, undefined, this.preferences.overmarkHighlight);
     if (this.hintPending && this.hintHoverPos && this.game.status === GameStatus.Playing) {
       this.renderer.renderHintOverlay(
         this.hintHoverPos.row, this.hintHoverPos.col,
@@ -633,6 +856,8 @@ export class App {
     }
     this.updateSmiley();
     this.updateStatusBar();
+    const overlay = document.getElementById("topology-overlay");
+    if (overlay?.classList.contains("open") && this.preferences.liveTopologyPreview) this.refreshTopologyPreview();
   }
 
   private updatePentagonShapeNoteVisibility(): void {
@@ -666,7 +891,8 @@ export class App {
     } else if (status === GameStatus.Won) {
       bar.textContent = "Congratulations, you win!";
     } else {
-      const topologySuffix = this.game.topology === "plane" ? "" : ` · Topology: ${this.game.topology}`;
+      const showTopology = this.preferences.showTopologyInStatusBar && this.game.topology !== "plane";
+      const topologySuffix = showTopology ? ` · Topology: ${this.game.topology}` : "";
       bar.textContent = `Mines remaining: ${this.game.remainingMines}${topologySuffix}`;
     }
     this.renderBreakdown();
