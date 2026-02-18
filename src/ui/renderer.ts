@@ -511,9 +511,11 @@ export class Renderer {
     const insetFactor =
       this.currentShape === "hex"
         ? 0.65
-        : this.currentShape === "irregular" || this.currentShape === "random"
-          ? 0.6
-          : 0.55;
+        : this.currentShape === "irregular"
+          ? 0.68
+          : this.currentShape === "random"
+            ? 0.6
+            : 0.55;
     let cx = 0, cy = 0;
     for (const p of g.points) { cx += p.x; cy += p.y; }
     cx /= g.points.length;
